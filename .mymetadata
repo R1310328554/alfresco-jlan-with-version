@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project-module
+  type="WEB"
+  name="LinkNewCifs"
+  id="myeclipse.1384140099906"
+  context-root="/LinkJlanCifs"
+  j2ee-spec="5.0"
+  archive="LinkNewCifs.war">
+  <attributes>
+    <attribute name="webrootdir" value="WebRoot" />
+  </attributes>
+</project-module>
+

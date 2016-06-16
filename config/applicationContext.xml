@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
+	<bean id="propertyConfigurer"
+		class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+		<property name="location" >
+			<value>classpath:/db_config.properties</value>
+		</property>
+	</bean>
+	
+	<bean id="ehCacheManager" class="org.springframework.cache.ehcache.EhCacheManagerFactoryBean"/>
+
+
+	<bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource"
+		destroy-method="close">
+		<property name="driverClass" value="${database.driver}"></property>
+		<property name="jdbcUrl" value="${database.url}"></property>
+		<property name="user" value="${database.username}"></property>
+		<property name="password" value="${database.password}"></property>
+		<property name="initialPoolSize" value="${database.initialPoolSize}"></property>
+		<property name="minPoolSize" value="${database.minPoolSize}"></property>
+		<property name="maxPoolSize" value="${database.maxPoolSize}"></property>
+		<property name="maxIdleTime" value="${database.maxIdleTime}"></property>
+		<property name="acquireIncrement" value="${database.acquireIncrement}"></property>
+		<property name="idleConnectionTestPeriod" value="${database.idleConnectionTestPeriod}"></property>
+		<property name="acquireRetryAttempts" value="${database.acquireRetryAttempts}"></property>
+		<property name="breakAfterAcquireFailure" value="${database.breakAfterAcquireFailure}"></property>
+		<property name="maxStatements" value="${database.maxStatements}"></property>
+		<property name="testConnectionOnCheckout" value="${database.testConnectionOnCheckout}"></property>
+	</bean>
+
+	<bean id="nativeJdbcExtractor" class="org.springframework.jdbc.support.nativejdbc.C3P0NativeJdbcExtractor" lazy-init="true" />
+	<bean id="springJdbcTemp" class="org.springframework.jdbc.core.JdbcTemplate">
+       <property name="dataSource" ref="dataSource"/>
+       <property name="nativeJdbcExtractor" ref="nativeJdbcExtractor"/>
+	</bean>
+
+  <bean id="filesSysdao"  class="com.fileSystem.imp.FilesMappingDaoImp">
+   <property name="springjdbcTemp" ref="springJdbcTemp" />
+   <property name="cacheManager" ref="ehCacheManager" />
+  </bean>
+  <!-- com.disk.JavaFileDiskDriver2 org.alfresco.jlan.server.filesys.db.DBDiskDriver-->
+  <bean id="DiskDriver" class="com.disk.JavaFileDiskDriver2">
+  	<property name="fileSysDao" ref="filesSysdao"/>
+  </bean>
+
+ <bean id="jdbcShareMapping" class="com.fileSystem.FilesMappingForDB">
+  <property name="fileSysDao" ref="filesSysdao"/>
+   <property name="aclManager" ref="accessManager" />
+  <property name="diskInterface" ref="DiskDriver" />
+   <property name="cacheManager" ref="ehCacheManager" />
+ </bean>
+
+
+	<bean id="userdetails" class="org.springframework.security.core.userdetails.jdbc.JdbcDaoImpl">
+		<property name="dataSource" ref="dataSource" />
+	 	<property name="usersByUsernameQuery" value="${sql.loadByusername}" />
+	    <property name="authoritiesByUsernameQuery" value="${sql.loadAuthotityByUser}" /> 
+	</bean>
+
+
+	<!--  认证 管理 器  -->
+	<bean id="authenticator" class="org.alfresco.jlan.server.auth.EnterpriseCifsAuthenticator" >
+	 <property name="userdetailsDAO"  ref="userdetails" /> 
+	</bean>
+  
+   <bean id="accessLoder"  class="com.auth.acl.jdbc.imp.DefaultDBAccessLoder">
+   <property name="springjdbcTemp" ref="springJdbcTemp"/>
+   </bean>
+   
+   
+   
+	<!-- ACL 权限  管理 器  -->
+	<bean id="accessManager" class="com.auth.acl.AccessManager" >
+	 <property name="accessLoder" ref="accessLoder"/>
+	 <property name="shareMapper" ref="jdbcShareMapping" /> 
+	</bean>
+	
+	<!-- 虚拟 CIFS ，NFS 服务 初始化  -->
+
+	<bean id="xmlServerConfig" class="org.alfresco.jlan.app.XMLServerConfiguration">
+	    <property name="authtor" ref="authenticator" />  
+		<property name="accessControlManager" ref="accessManager"/>
+ 		<property name="shareMapper" ref="jdbcShareMapping"/>
+		<property name="xmlpath" value="jlanConfig.xml"/>
+	</bean>
+
+
+	<!-- SMB 服务 configure   -->
+	<bean id="netBIOS" class="org.alfresco.jlan.netbios.server.NetBIOSNameServer">
+		<constructor-arg ref="xmlServerConfig"/>
+	</bean>
+
+      
+	<bean id="smbService" class="org.alfresco.jlan.smb.server.SMBServer" scope="singleton">
+		<constructor-arg ref="xmlServerConfig" />
+	</bean>
+	
+	<bean id="baseDao" class="com.dao.impl.BaseDaoImpl" scope="prototype">
+		<property name="jdbcTemplate" ref="springJdbcTemp" />
+	</bean>
+
+</beans>

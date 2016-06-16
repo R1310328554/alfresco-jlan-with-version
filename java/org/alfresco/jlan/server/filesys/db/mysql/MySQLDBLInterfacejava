@@ -1,0 +1,894 @@
+/*
+ * Copyright (c) LinkApp Team All rights reserved.
+ * 版权归LinkApp研发团队所有
+ * 任何的侵权、盗版行为均将追究其法律责任
+ * 
+ * The LinkApp Project
+ * http://www.linkapp.cn
+ */
+
+package org.alfresco.jlan.server.filesys.db.mysql;
+
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.sql.Blob;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.Date;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+import javax.servlet.ServletContext;
+
+import net.sf.ehcache.Cache;
+import net.sf.ehcache.CacheManager;
+import net.sf.ehcache.Element;
+import org.alfresco.jlan.server.config.InvalidConfigurationException;
+import org.alfresco.jlan.server.filesys.AccessDeniedException;
+import org.alfresco.jlan.server.filesys.DiskFullException;
+import org.alfresco.jlan.server.filesys.DiskOfflineException;
+import org.alfresco.jlan.server.filesys.FileAttribute;
+import org.alfresco.jlan.server.filesys.FileExistsException;
+import org.alfresco.jlan.server.filesys.FileInfo;
+import org.alfresco.jlan.server.filesys.FileName;
+import org.alfresco.jlan.server.filesys.FileOpenParams;
+import org.alfresco.jlan.server.filesys.FileStatus;
+import org.alfresco.jlan.server.filesys.FileType;
+import org.alfresco.jlan.server.filesys.cache.FileState;
+import org.alfresco.jlan.server.filesys.cache.LocalFileState;
+import org.alfresco.jlan.server.filesys.db.DBDataDetails;
+import org.alfresco.jlan.server.filesys.db.DBDataDetailsList;
+import org.alfresco.jlan.server.filesys.db.DBDataInterface;
+import org.alfresco.jlan.server.filesys.db.DBDeviceContext;
+import org.alfresco.jlan.server.filesys.db.DBException;
+import org.alfresco.jlan.server.filesys.db.DBFileInfo;
+import org.alfresco.jlan.server.filesys.db.DBFileLoader;
+import org.alfresco.jlan.server.filesys.db.DBInterface;
+import org.alfresco.jlan.server.filesys.db.DBObjectIdInterface;
+import org.alfresco.jlan.server.filesys.db.DBQueueInterface;
+import org.alfresco.jlan.server.filesys.db.DBSearchContext;
+import org.alfresco.jlan.server.filesys.db.JdbcDBLInterface;
+import org.alfresco.jlan.server.filesys.db.ObjectIdFileLoader;
+import org.alfresco.jlan.server.filesys.db.RetentionDetails;
+import org.alfresco.jlan.server.filesys.loader.CachedFileInfo;
+import org.alfresco.jlan.server.filesys.loader.FileRequest;
+import org.alfresco.jlan.server.filesys.loader.FileRequestQueue;
+import org.alfresco.jlan.server.filesys.loader.FileSegment;
+import org.alfresco.jlan.server.filesys.loader.FileSegmentInfo;
+import org.alfresco.jlan.server.filesys.loader.MultipleFileRequest;
+import org.alfresco.jlan.server.filesys.loader.SingleFileRequest;
+import org.alfresco.jlan.smb.server.ntfs.StreamInfo;
+import org.alfresco.jlan.smb.server.ntfs.StreamInfoList;
+import org.alfresco.jlan.util.MemorySize;
+import org.alfresco.jlan.util.StringList;
+import org.alfresco.jlan.util.WildCard;
+import org.alfresco.jlan.util.db.DBConnectionPool;
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.springframework.extensions.config.ConfigElement;
+
+import com.base.config.UserBean;
+import com.util.AESUtil;
+import com.util.CacheManagerUtil;
+import com.util.DBUtil;
+import com.util.DiskUtil;
+import com.util.FileParser;
+import com.util.FileUtil;
+import com.util.MD5Util;
+import com.util.StringUtil;
+
+/**
+ * mySQL Database Interface Class 资料库-我的文件-收到的共享文件接口
+ * 
+ * <p>
+ * mySQL specific implementation of the database interface used by the database
+ * filesystem driver (DBDiskDriver).
+ * 
+ * @author gkspencer
+ */
+public class MySQLDBLInterface extends JdbcDBLInterface implements
+		DBQueueInterface, DBDataInterface, DBObjectIdInterface {
+	// Memory buffer maximum size
+
+	public final static long MaxMemoryBuffer = MemorySize.MEGABYTE / 2; // 1/2Mb
+	
+
+	public final static String FileSysTable_MYFILE			= "jweb_filecache";
+	public final static String StreamsTable_MYFILE	    	= "jweb_JLANStreams";
+	public final static String FileRevisionTable_MYFILE	= "jweb_filerevision";
+//	public final static String RetentionTable_MYFILE		= "jweb_JLANRetain";
+//	public final static String QueueTable_MYFILE			= "jweb_JLANQueue";
+//	public final static String TransactQueueTable_MYFILE	= "jweb_JLANTransQueue";
+//	public final static String DataTable_MYFILE			= "jweb_JLANData";
+//	public final static String JarDataTable_MY			= "jweb_JLANJarData";
+//	public final static String ObjectIdTable_MY		= "jweb_JLANObjectIds";
+//	public final static String SymLinkTable_MY       	= "jweb_JLANSymLinks";
+	
+	public final static String FileSysTable_COMMFILE			= "jweb_commonfilecache";
+	public final static String StreamsTable_COMMFILE	    	= "jweb_JLANStreamsCommon";//三种类型都用一个表
+	public final static String FileRevisionTable_COMMFILE	= "jweb_commonfilerevision";
+	public final static String RetentionTable_COMMFILE		= "jweb_JLANRetainCommon";
+	public final static String QueueTable_COMMFILE			= "jweb_JLANQueueCommon";//三种类型都用一个表
+	public final static String TransactQueueTable_COMMFILE	= "jweb_JLANTransQueueCommon";//三种类型都用一个表
+	public final static String DataTable_COMMFILE			= "jweb_JLANDataCommon";
+//	public final static String JarDataTable_COMMFILE			= "jweb_JLANJarData";
+//	public final static String ObjectIdTable_COMMFILE		= "jweb_JLANObjectIds";
+//	public final static String SymLinkTable_COMMFILE       	= "jweb_JLANSymLinks";
+	
+	
+	public final static String FileSysTable_SHAREFILE			= "jweb_sharefilecache";
+	public final static String StreamsTable_SHAREFILE	    	= "jweb_JLANStreamsShare";
+	public final static String FileRevisionTable_SHAREFILE	= "jweb_sharefilerevision";
+//	public final static String RetentionTable_SHAREFILE		= "jweb_JLANRetainShare";
+//	public final static String QueueTable_SHAREFILE			= "jweb_JLANQueueShare";
+//	public final static String TransactQueueTable_SHAREFILE	= "jweb_JLANTransQueueShare";
+//	public final static String DataTable_SHAREFILE			= "jweb_JLANDataShare";
+//	public final static String JarDataTable_SHAREFILE			= "jweb_JLANJarData";
+//	public final static String ObjectIdTable_SHAREFILE		= "jweb_JLANObjectIds";
+//	public final static String SymLinkTable_SHAREFILE       	= "jweb_JLANSymLinks";
+
+
+	// Lock file name, used to check if server shutdown was clean or not
+
+	public final static String LockFileName = "MySQLLoader.lock";
+	public static final String ROLE_VALUE_FOR_ADMIN = "brltwpdgucem";
+	SimpleDateFormat sf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+
+	// MySQL error codes
+	private Logger log4j = Logger.getLogger(this.getClass());
+	private static final int ErrorDuplicateEntry = 1062;
+	private static final String wpsRenameReg = "\\.([a-zA-Z0-9]+)~([a-zA-Z0-9]+)\\.TMP$";// Office临时重命名文件命名归则2
+	private static final String findMaxRevision_hql = "SELECT max_value FROM jweb_commonfilerevision_value";
+	private static final String updateMaxRevision_hql = "UPDATE jweb_commonfilerevision_value SET max_value=(max_value+1)";
+	private static final String searchShares_sql = " SELECT -1 as id,0 as pid,name,0 as size,null AS add_time,0 as lastModified,isFile,isHidden,0 as userId,'rw' as permissions FROM  jweb_shares  WHERE status >=0 ";
+	private static final String webLink_sql = "SELECT t.value FROM jweb_config t WHERE t.name='web.link'";
+
+	// Database connection and prepared statement used to write file requests to
+	// the queue tables
+
+	private Connection m_dbConn;
+	private PreparedStatement m_reqStmt;
+	private PreparedStatement m_tranStmt;
+
+	public final static int StsSuccess = 0;
+	public final static int StsRequeue = 1;
+	public final static int StsError = 2;
+
+	public static final String USERSPACE_MAXSIZE = "userspace.maxSize";// 用户空间大小
+	public static final int delFileKeepTime = 10000;// 10000  ms=10s,删除的文件临时保留时长，用于部分软件保存文件时，是先删除原文件，再上传新文件的情况)
+	public static boolean initData = false;
+
+	/**
+	 * Default constructor
+	 */
+	public MySQLDBLInterface() {
+		super();
+	}
+
+	/**
+	 * Return the database interface name
+	 * 
+	 * @return String
+	 */
+	public String getDBInterfaceName() {
+		return "mySQL";
+	}
+
+	/**
+	 * Get the supported database features mask
+	 * 
+	 * @return int
+	 */
+	protected int getSupportedFeatures() {
+
+		// Determine the available database interface features
+
+		return FeatureNTFS + FeatureRetention + FeatureSymLinks + FeatureQueue
+				+ FeatureData + FeatureJarData + FeatureObjectId;
+	}
+
+	/**
+	 * Initialize the database interface
+	 * 
+	 * @param dbCtx
+	 *            DBDeviceContext
+	 * @param params
+	 *            ConfigElement
+	 * @exception InvalidConfigurationException
+	 */
+	public void initializeDatabase(DBDeviceContext dbCtx, ConfigElement params)
+			throws InvalidConfigurationException {
+		// Set the JDBC driver class, must be set before the connection pool is
+		
+		
+		// Create the database connection pool
+		//启动后只初始化一次，如果已经初始化过，则不再初始化	
+		
+		if(initData==false)//未初始化过
+		{
+			// created
+			setDriverName("com.mysql.jdbc.Driver");
+			// Call the base class to do the main initialization
+			super.initializeDatabase(dbCtx, params);
+
+			// Force the autoReconnect to be enabled
+
+			if (getDSNString().indexOf("?autoReconnect=") == -1
+					&& params.getChild("noAutoReconnect") == null)
+				setDSNString(getDSNString() + "?autoReconnect=true");
+			
+			try {
+				createConnectionPool();
+			} catch (Exception ex) {
+
+				// DEBUG
+				log4j.error("[mySQL] Error creating connection pool, "
+						+ ex.toString());
+
+				// Rethrow the exception
+
+				throw new InvalidConfigurationException(
+						"Failed to create connection pool, " + ex.getMessage());
+			}
+			
+		// Check if the file system table exists
+
+		Connection conn = null;
+
+		try {
+
+			// Open a connection to the database
+
+			conn = getConnection();
+
+			DatabaseMetaData dbMeta = conn.getMetaData();
+			ResultSet rs = dbMeta.getTables("", "", "", null);
+
+//			boolean foundStruct = false;
+			boolean foundStream_myfile = false;
+			boolean foundRetain_myfile = false;
+			boolean foundQueue_myfile = false;
+			boolean foundTrans_myfile = false;
+			boolean foundData_myfile = false;
+			
+			boolean foundJarData = false;
+			boolean foundObjId = false;
+			boolean foundSymLink = false;
+			boolean foundCommonRevisionValue = false;
+			
+			boolean foundStream_commfile = false;
+			boolean foundRetain_commfile = false;
+			boolean foundQueue_commfile = false;
+			boolean foundTrans_commfile = false;
+			boolean foundData_commfile = false;
+			
+			boolean foundStream_sharefile = false;
+			boolean foundRetain_sharefile = false;
+			boolean foundQueue_sharefile = false;
+			boolean foundTrans_sharefile = false;
+			boolean foundData_sharefile = false;
+			
+
+			while (rs.next()) {
+
+				// Get the table name
+
+				String tblName = rs.getString("TABLE_NAME");
+
+				// Check if we found the filesystem structure or streams table
+/*
+				if (tblName.equalsIgnoreCase(getFileSysTableName()))
+					foundStruct = true;
+				else if (hasStreamsTableName()
+						&& tblName.equalsIgnoreCase(getStreamsTableName()))
+					foundStream = true;
+				else if (hasRetentionTableName()
+						&& tblName.equalsIgnoreCase(getRetentionTableName()))
+					foundRetain = true;
+				else if (hasDataTableName()
+						&& tblName.equalsIgnoreCase(getDataTableName()))
+					foundData = true;
+				else if (hasJarDataTableName()
+						&& tblName.equalsIgnoreCase(getJarDataTableName()))
+					foundJarData = true;
+				else if (hasQueueTableName()
+						&& tblName.equalsIgnoreCase(getQueueTableName()))
+					foundQueue = true;
+				else if (hasTransactionTableName()
+						&& tblName.equalsIgnoreCase(getTransactionTableName()))
+					foundTrans = true;
+				else if (hasObjectIdTableName()
+						&& tblName.equalsIgnoreCase(getObjectIdTableName()))
+					foundObjId = true;
+				else if (hasSymLinksTableName()
+						&& tblName.equalsIgnoreCase(getSymLinksTableName()))
+					foundSymLink = true;
+				else if(tblName.equalsIgnoreCase("jweb_commonfilerevision_value"))
+					foundCommonRevisionValue = true;*/
+				
+				if (tblName.equalsIgnoreCase(StreamsTable_MYFILE))
+					foundStream_myfile = true;
+				else if (tblName.equalsIgnoreCase(StreamsTable_COMMFILE))
+					foundStream_commfile = true;
+				else if (tblName.equalsIgnoreCase(StreamsTable_SHAREFILE))
+					foundStream_sharefile = true;
+				
+//				else if (tblName.equalsIgnoreCase(RetentionTable_MYFILE))
+//					foundRetain_myfile = true;				
+				else if (tblName.equalsIgnoreCase(RetentionTable_COMMFILE))
+					foundRetain_commfile = true;
+//				else if (tblName.equalsIgnoreCase(RetentionTable_SHAREFILE))
+//					foundRetain_sharefile = true;
+				
+//				else if (tblName.equalsIgnoreCase(QueueTable_MYFILE))
+//					foundQueue_myfile = true;				
+				else if (tblName.equalsIgnoreCase(QueueTable_COMMFILE))
+					foundQueue_commfile = true;
+//				else if (tblName.equalsIgnoreCase(QueueTable_SHAREFILE))
+//					foundQueue_sharefile = true;
+				
+//				else if (tblName.equalsIgnoreCase(TransactQueueTable_MYFILE))
+//					foundTrans_myfile = true;				
+				else if (tblName.equalsIgnoreCase(TransactQueueTable_COMMFILE))
+					foundTrans_commfile = true;
+//				else if (tblName.equalsIgnoreCase(TransactQueueTable_SHAREFILE))
+//					foundTrans_sharefile = true;
+				
+//				else if (tblName.equalsIgnoreCase(DataTable_MYFILE))
+//					foundData_myfile = true;				
+				else if (tblName.equalsIgnoreCase(DataTable_COMMFILE))
+					foundData_commfile = true;
+//				else if (tblName.equalsIgnoreCase(DataTable_SHAREFILE))
+//					foundData_sharefile = true;
+				//others
+				else if (tblName.equalsIgnoreCase(JarDataTable))
+					foundJarData = true;				
+				else if (tblName.equalsIgnoreCase(ObjectIdTable))
+					foundObjId = true;
+				else if (tblName.equalsIgnoreCase(SymLinkTable))
+					foundSymLink = true;
+				
+				else if(tblName.equalsIgnoreCase("jweb_commonfilerevision_value"))
+					foundCommonRevisionValue = true;
+			}
+
+			// Check if the file system structure table should be created
+
+			/*if (foundStruct == false) {
+
+				// Create the file system structure table
+
+				Statement stmt = conn.createStatement();
+
+				stmt
+						.execute("CREATE TABLE "
+								+ getFileSysTableName()
+								+ " (FileId INTEGER AUTO_INCREMENT, DirId INTEGER, FileName VARCHAR(255) BINARY NOT NULL, FileSize BIGINT,"
+								+ "CreateDate BIGINT, ModifyDate BIGINT, AccessDate BIGINT, ChangeDate BIGINT, ReadOnly BIT, Archived BIT, Directory BIT,"
+								+ "SystemFile BIT, Hidden BIT, IsSymLink BIT, Uid INTEGER, Gid INTEGER, Mode INTEGER, Deleted BIT NOT NULL DEFAULT 0, "
+								+ "PRIMARY KEY (FileId));");
+
+				// Create various indexes
+
+				stmt.execute("ALTER TABLE " + getFileSysTableName()
+						+ " ADD UNIQUE INDEX IFileDirId (FileName,DirId);");
+				stmt.execute("ALTER TABLE " + getFileSysTableName()
+						+ " ADD INDEX IDirId (DirId);");
+				stmt.execute("ALTER TABLE " + getFileSysTableName()
+						+ " ADD INDEX IDir (DirId,Directory);");
+				stmt
+						.execute("ALTER TABLE "
+								+ getFileSysTableName()
+								+ " ADD UNIQUE INDEX IFileDirIdDir (FileName,DirId,Directory);");
+
+				stmt.close();
+
+				// DEBUG
+				log4j.info("[mySQL] Created table " + getFileSysTableName());
+			}*/
+
+			// Check if the file streams table should be created
+			
+			
+			/*if (isNTFSEnabled() && foundStream == false
+					&& getStreamsTableName() != null) {
+
+				// Create the file streams table
+
+				Statement stmt = conn.createStatement();
+
+				stmt
+						.execute("CREATE TABLE "
+								+ getStreamsTableName()
+								+ " (StreamId INTEGER AUTO_INCREMENT, FileId INTEGER NOT NULL, StreamName VARCHAR(255) BINARY NOT NULL, StreamSize BIGINT,"
+								+ "CreateDate BIGINT, ModifyDate BIGINT, AccessDate BIGINT, PRIMARY KEY (StreamId));");
+
+				// Create various indexes
+
+				stmt.execute("ALTER TABLE " + getStreamsTableName()
+						+ " ADD INDEX IFileId (FileId);");
+
+				stmt.close();
+
+				// DEBUG
+				log4j.info("[mySQL] Created table " + getStreamsTableName());
+			}*/
+			
+			if (isNTFSEnabled() ){
+				
+				if(foundStream_myfile==false)
+				{
+					// Create the file streams table
+
+					Statement stmt = conn.createStatement();
+
+					stmt
+							.execute("CREATE TABLE "
+									+ StreamsTable_MYFILE
+									+ " (StreamId INTEGER AUTO_INCREMENT, FileId INTEGER NOT NULL, StreamName VARCHAR(255) BINARY NOT NULL, StreamSize BIGINT,"
+									+ "CreateDate BIGINT, ModifyDate BIGINT, AccessDate BIGINT, PRIMARY KEY (StreamId));");
+
+					// Create various indexes
+
+					stmt.execute("ALTER TABLE " + StreamsTable_MYFILE
+							+ " ADD INDEX IFileId (FileId);");
+
+					stmt.close();
+
+					// DEBUG
+					log4j.info("[mySQL] Created table " + StreamsTable_MYFILE);
+				}
+				if(foundStream_commfile==false)
+				{
+					// Create the file streams table
+
+					Statement stmt = conn.createStatement();
+
+					stmt
+							.execute("CREATE TABLE "
+									+ StreamsTable_COMMFILE
+									+ " (StreamId INTEGER AUTO_INCREMENT, FileId INTEGER NOT NULL, StreamName VARCHAR(255) BINARY NOT NULL, StreamSize BIGINT,"
+									+ "CreateDate BIGINT, ModifyDate BIGINT, AccessDate BIGINT, PRIMARY KEY (StreamId));");
+
+					// Create various indexes
+
+					stmt.execute("ALTER TABLE " + StreamsTable_COMMFILE
+							+ " ADD INDEX IFileId (FileId);");
+
+					stmt.close();
+
+					// DEBUG
+					log4j.info("[mySQL] Created table " + StreamsTable_MYFILE);
+				}
+				if(foundStream_sharefile==false)
+				{
+					// Create the file streams table
+
+					Statement stmt = conn.createStatement();
+
+					stmt
+							.execute("CREATE TABLE "
+									+ StreamsTable_SHAREFILE
+									+ " (StreamId INTEGER AUTO_INCREMENT, FileId INTEGER NOT NULL, StreamName VARCHAR(255) BINARY NOT NULL, StreamSize BIGINT,"
+									+ "CreateDate BIGINT, ModifyDate BIGINT, AccessDate BIGINT, PRIMARY KEY (StreamId));");
+
+					// Create various indexes
+
+					stmt.execute("ALTER TABLE " + StreamsTable_SHAREFILE
+							+ " ADD INDEX IFileId (FileId);");
+
+					stmt.close();
+
+					// DEBUG
+					log4j.info("[mySQL] Created table " + StreamsTable_MYFILE);
+				}
+				
+			}
+
+			// Check if the retention table should be created
+
+			/*if (isRetentionEnabled() && foundRetain == false
+					&& getRetentionTableName() != null) {
+
+				// Create the retention period data table
+
+				Statement stmt = conn.createStatement();
+
+				stmt
+						.execute("CREATE TABLE "
+								+ getRetentionTableName()
+								+ " (FileId INTEGER NOT NULL, StartDate TIMESTAMP, EndDate TIMESTAMP,"
+								+ "PurgeFlag TINYINT(1), PRIMARY KEY (FileId));");
+				stmt.close();
+
+				// DEBUG
+
+				log4j.info("[mySQL] Created table " + getRetentionTableName());
+			}*/
+			if (isRetentionEnabled()) {
+
+//				if(foundRetain_myfile==false)
+//				{
+//					// Create the retention period data table
+//
+//					Statement stmt = conn.createStatement();
+//
+//					stmt
+//							.execute("CREATE TABLE "
+//									+ RetentionTable_MYFILE
+//									+ " (FileId INTEGER NOT NULL, StartDate TIMESTAMP, EndDate TIMESTAMP,"
+//									+ "PurgeFlag TINYINT(1), PRIMARY KEY (FileId));");
+//					stmt.close();
+//
+//					// DEBUG
+//
+//					log4j.info("[mySQL] Created table " + RetentionTable_MYFILE);
+//				}
+				if(foundRetain_commfile==false)
+				{
+					// Create the retention period data table
+
+					Statement stmt = conn.createStatement();
+
+					stmt
+							.execute("CREATE TABLE "
+									+ RetentionTable_COMMFILE
+									+ " (FileId INTEGER NOT NULL, StartDate TIMESTAMP, EndDate TIMESTAMP,"
+									+ "PurgeFlag TINYINT(1), PRIMARY KEY (FileId));");
+					stmt.close();
+
+					// DEBUG
+
+					log4j.info("[mySQL] Created table " + RetentionTable_COMMFILE);
+				}
+//				if(foundRetain_sharefile==false)
+//				{
+//					// Create the retention period data table
+//
+//					Statement stmt = conn.createStatement();
+//
+//					stmt
+//							.execute("CREATE TABLE "
+//									+ RetentionTable_SHAREFILE
+//									+ " (FileId INTEGER NOT NULL, StartDate TIMESTAMP, EndDate TIMESTAMP,"
+//									+ "PurgeFlag TINYINT(1), PRIMARY KEY (FileId));");
+//					stmt.close();
+//
+//					// DEBUG
+//
+//					log4j.info("[mySQL] Created table " + RetentionTable_SHAREFILE);
+//				}
+			}
+
+			// Check if the file loader queue table should be created
+
+			if (isQueueEnabled()) {
+
+//				if(foundQueue_myfile==false)
+//				{
+//					// Create the request queue data table
+//
+//					Statement stmt = conn.createStatement();
+//
+//					stmt
+//							.execute("CREATE TABLE "
+//									+ QueueTable_MYFILE
+//									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, ReqType SMALLINT,"
+//									+ "SeqNo INTEGER AUTO_INCREMENT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP, Attribs VARCHAR(512), PRIMARY KEY (SeqNo));");
+//					stmt.execute("ALTER TABLE " +QueueTable_MYFILE
+//							+ " ADD INDEX IFileId (FileId);");
+//					stmt.execute("ALTER TABLE " +QueueTable_MYFILE
+//							+ " ADD INDEX IFileIdType (FileId, ReqType);");
+//
+//					stmt.close();
+//
+//					// DEBUG
+//					log4j.info("[mySQL] Created table " + QueueTable_MYFILE);
+//				}
+				
+				if(foundQueue_commfile==false)
+				{
+					// Create the request queue data table
+
+					Statement stmt = conn.createStatement();
+
+					stmt
+							.execute("CREATE TABLE "
+									+ QueueTable_COMMFILE
+									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, ReqType SMALLINT,"
+									+ "SeqNo INTEGER AUTO_INCREMENT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP, Attribs VARCHAR(512), PRIMARY KEY (SeqNo));");
+					stmt.execute("ALTER TABLE " +QueueTable_COMMFILE
+							+ " ADD INDEX IFileId (FileId);");
+					stmt.execute("ALTER TABLE " +QueueTable_COMMFILE
+							+ " ADD INDEX IFileIdType (FileId, ReqType);");
+
+					stmt.close();
+
+					// DEBUG
+					log4j.info("[mySQL] Created table " + QueueTable_COMMFILE);
+				}
+				
+				/*if(foundQueue_sharefile==false)
+				{
+					// Create the request queue data table
+
+					Statement stmt = conn.createStatement();
+
+					stmt
+							.execute("CREATE TABLE "
+									+ QueueTable_SHAREFILE
+									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, ReqType SMALLINT,"
+									+ "SeqNo INTEGER AUTO_INCREMENT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP, Attribs VARCHAR(512), PRIMARY KEY (SeqNo));");
+					stmt.execute("ALTER TABLE " +QueueTable_SHAREFILE
+							+ " ADD INDEX IFileId (FileId);");
+					stmt.execute("ALTER TABLE " +QueueTable_SHAREFILE
+							+ " ADD INDEX IFileIdType (FileId, ReqType);");
+
+					stmt.close();
+
+					// DEBUG
+					log4j.info("[mySQL] Created table " + QueueTable_MYFILE);
+				}
+				*/
+			}
+
+			// Check if the file loader transaction queue table should be
+			// created
+
+			if (isQueueEnabled()) {
+
+				/*if(foundTrans_myfile==false)
+				{
+					// Create the transaction request queue data table
+
+					Statement stmt = conn.createStatement();
+
+					stmt
+							.execute("CREATE TABLE "
+									+ TransactQueueTable_MYFILE
+									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL,"
+									+ "TranId INTEGER NOT NULL, ReqType SMALLINT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP,"
+									+ "Attribs VARCHAR(512), PRIMARY KEY (FileId,StreamId,TranId));");
+
+					stmt.close();
+
+					// DEBUG
+					log4j
+							.info("[mySQL] Created table "
+									+ TransactQueueTable_MYFILE);
+				}*/
+				if(foundTrans_commfile==false)
+				{
+					// Create the transaction request queue data table
+
+					Statement stmt = conn.createStatement();
+
+					stmt
+							.execute("CREATE TABLE "
+									+ TransactQueueTable_COMMFILE
+									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL,"
+									+ "TranId INTEGER NOT NULL, ReqType SMALLINT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP,"
+									+ "Attribs VARCHAR(512), PRIMARY KEY (FileId,StreamId,TranId));");
+
+					stmt.close();
+
+					// DEBUG
+					log4j
+							.info("[mySQL] Created table "
+									+ TransactQueueTable_COMMFILE);
+				}
+				/*if(foundTrans_sharefile==false)
+				{
+					// Create the transaction request queue data table
+
+					Statement stmt = conn.createStatement();
+
+					stmt
+							.execute("CREATE TABLE "
+									+ TransactQueueTable_SHAREFILE
+									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL,"
+									+ "TranId INTEGER NOT NULL, ReqType SMALLINT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP,"
+									+ "Attribs VARCHAR(512), PRIMARY KEY (FileId,StreamId,TranId));");
+
+					stmt.close();
+
+					// DEBUG
+					log4j
+							.info("[mySQL] Created table "
+									+ TransactQueueTable_SHAREFILE);
+				}*/
+				
+			}
+
+			// Check if the file data table should be created
+
+			if (isDataEnabled()) {
+
+//				if(foundData_myfile==false)
+//				{
+//					// Create the file data table
+//
+//					Statement stmt = conn.createStatement();
+//
+//					stmt
+//							.execute("CREATE TABLE "
+//									+ DataTable_MYFILE
+//									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, FragNo INTEGER, FragLen INTEGER, Data LONGBLOB, JarFile BIT, JarId INTEGER);");
+//
+//					stmt.execute("ALTER TABLE " + DataTable_MYFILE
+//							+ " ADD INDEX IFileStreamId (FileId,StreamId);");
+//					stmt.execute("ALTER TABLE " + DataTable_MYFILE
+//							+ " ADD INDEX IFileId (FileId);");
+//					stmt.execute("ALTER TABLE " + DataTable_MYFILE
+//							+ " ADD INDEX IFileIdFrag (FileId,FragNo);");
+//
+//					stmt.close();
+//
+//					// DEBUG
+//					log4j.info("[mySQL] Created table " + DataTable_MYFILE);
+//				}
+				if(foundData_commfile==false)
+				{
+					// Create the file data table
+
+					Statement stmt = conn.createStatement();
+
+					stmt
+							.execute("CREATE TABLE "
+									+ DataTable_COMMFILE
+									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, FragNo INTEGER, FragLen INTEGER, Data LONGBLOB, JarFile BIT, JarId INTEGER);");
+
+					stmt.execute("ALTER TABLE " + DataTable_COMMFILE
+							+ " ADD INDEX IFileStreamId (FileId,StreamId);");
+					stmt.execute("ALTER TABLE " + DataTable_COMMFILE
+							+ " ADD INDEX IFileId (FileId);");
+					stmt.execute("ALTER TABLE " + DataTable_COMMFILE
+							+ " ADD INDEX IFileIdFrag (FileId,FragNo);");
+
+					stmt.close();
+
+					// DEBUG
+					log4j.info("[mySQL] Created table " + DataTable_COMMFILE);
+				}
+//				if(foundData_sharefile==false)
+//				{
+//					// Create the file data table
+//
+//					Statement stmt = conn.createStatement();
+//
+//					stmt
+//							.execute("CREATE TABLE "
+//									+ DataTable_SHAREFILE
+//									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, FragNo INTEGER, FragLen INTEGER, Data LONGBLOB, JarFile BIT, JarId INTEGER);");
+//
+//					stmt.execute("ALTER TABLE " + DataTable_SHAREFILE
+//							+ " ADD INDEX IFileStreamId (FileId,StreamId);");
+//					stmt.execute("ALTER TABLE " + DataTable_SHAREFILE
+//							+ " ADD INDEX IFileId (FileId);");
+//					stmt.execute("ALTER TABLE " + DataTable_SHAREFILE
+//							+ " ADD INDEX IFileIdFrag (FileId,FragNo);");
+//
+//					stmt.close();
+//
+//					// DEBUG
+//					log4j.info("[mySQL] Created table " + DataTable_SHAREFILE);
+//				}
+				
+			}
+
+			// Check if the Jar file data table should be created
+
+			if (isJarDataEnabled() && foundJarData == false) {
+
+				// Create the Jar file data table
+
+				Statement stmt = conn.createStatement();
+
+				stmt
+						.execute("CREATE TABLE "
+								+ JarDataTable
+								+ " (JarId INTEGER AUTO_INCREMENT, Data LONGBLOB, PRIMARY KEY (JarId));");
+
+				stmt.close();
+
+				// DEBUG
+				log4j.info("[mySQL] Created table " + JarDataTable);
+			}
+
+			// Check if the file id/object id mapping table should be created
+
+			if (isObjectIdEnabled() && foundObjId == false) {
+
+				// Create the file id/object id mapping table
+
+				Statement stmt = conn.createStatement();
+
+				stmt
+						.execute("CREATE TABLE "
+								+ ObjectIdTable
+								+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, ObjectId VARCHAR(128), PRIMARY KEY (FileId,StreamId))");
+
+				stmt.close();
+
+				// DEBUG
+
+				log4j.info("[mySQL] Created table " + ObjectIdTable);
+			}
+
+			// Check if the symbolic links table should be created
+
+			if (isSymbolicLinksEnabled() && foundSymLink == false) {
+
+				// Create the symbolic links table
+
+				Statement stmt = conn.createStatement();
+
+				stmt
+						.execute("CREATE TABLE "
+								+ SymLinkTable
+								+ " (FileId INTEGER NOT NULL PRIMARY KEY, SymLink VARCHAR(8192))");
+
+				stmt.close();
+
+				// DEBUG
+				log4j.info("[mySQL] Created table " + SymLinkTable);
+			}
+			
+			if(foundCommonRevisionValue==false)
+			{
+				// Create the CommonFile Revision Value mapping table
+
+				Statement stmt = conn.createStatement();
+
+				stmt.execute("CREATE TABLE `jweb_commonfilerevision_value` "+
+						"(max_value bigint(20) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;");
+				stmt.execute("REPLACE INTO `jweb_commonfilerevision_value` select max(revision) from jweb_commonfilecache;");				
+				stmt.close();
+				// DEBUG
+
+				log4j.info("[mySQL] Created table  `jweb_commonfilerevision_value`");
+			}
+		} catch (Exception ex) {
+			log4j.error("Error: " + ex.toString());
+		} finally {
+
+			// Release the database connection
+
+			if (conn != null)
+				releaseConnection(conn);
+		}
+		
+		initData = true;//已经初始化过
+		}
+	}
+	
+
+	public final static int SAVE			= 1;
+	public static void main(String[] args) {
+		
+		int fid = 123456789;
+		String tempPath = "c:\\abc";
+		String vritPath = "c:\\abc";
+//		FileSegmentInfo fileSegInfo = new FileSegmentInfo();
+//		fileSegInfo.setTemporaryFile(tempPath);
+		FileState fstate = new LocalFileState("test.txt", true);
+
+		SingleFileRequest req = new SingleFileRequest(SAVE, fid ,fid, tempPath, vritPath, fstate );
+	}
+
+}

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ehcache xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="http://ehcache.org/ehcache.xsd" updateCheck="false">
+    <!--
+     | Please see http://ehcache.sourceforge.net/documentation/configuration.html for
+     | detailed information on how to configurigure caches in this file
+     +-->
+    <!-- Location of persistent caches on disk -->
+    <diskStore path="java.io.tmpdir/EhCacheSpringAnnotationsNas" />
+
+    <defaultCache eternal="false" maxElementsInMemory="10000"
+        overflowToDisk="false" diskPersistent="false" timeToIdleSeconds="60"
+        timeToLiveSeconds="60" memoryStoreEvictionPolicy="LRU"/>
+        
+    <cache name="configCache"
+        eternal="true"
+        overflowToDisk="true"
+        memoryStoreEvictionPolicy="LFU" />
+        
+    <cache name="GroupIdsCache"
+        eternal="true"
+        overflowToDisk="true"
+        memoryStoreEvictionPolicy="LFU" />
+        
+    <cache name="DepartmentPathCache"
+        eternal="true"
+        overflowToDisk="true"
+        memoryStoreEvictionPolicy="LFU" />
+	
+	<cache name="UserCache" 
+        eternal="true"
+        overflowToDisk="true"
+        memoryStoreEvictionPolicy="LFU" />
+    
+    <cache name="PoolPathCache"
+        eternal="true"
+        overflowToDisk="true"
+        memoryStoreEvictionPolicy="LFU" />
+       
+    <cache name="EquipmentPathCache" 
+        eternal="true"
+        overflowToDisk="true"
+        memoryStoreEvictionPolicy="LFU" />
+        
+   <!-- 
+   <cache name="SearchUCache" 
+        eternal="true"
+        overflowToDisk="true"
+        memoryStoreEvictionPolicy="LFU" />
+   -->
+   
+  <cache name="SearchSharesCache"
+        eternal="true"
+        overflowToDisk="true"
+        memoryStoreEvictionPolicy="LFU" />
+ 
+  <cache name="BaseUrlCache"
+        eternal="true"
+        overflowToDisk="true"
+        memoryStoreEvictionPolicy="LFU" />
+</ehcache>

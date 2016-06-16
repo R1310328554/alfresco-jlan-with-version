@@ -1,0 +1,353 @@
+<?xml version="1.0" standalone="no"?>
+
+
+<jlanserver>
+	<servers>
+		<SMB />
+		<CIFS/>
+		<noFTP />
+		<noNFS />
+	</servers>
+
+
+	<SMB>
+		<host name="linkapp" domain="localdomain">
+			<!-- 子网掩码 -->
+			<broadcast>255.255.255.0</broadcast>
+			<!-- 绑定IP，网卡（默认不需要绑定，所有IP可用）-->
+			<!--
+			<bindto>192.168.4.200</bindto>
+			<bindto adapter=”eth0”/>
+			-->
+			 <!-- SMB方言 -->
+			<smbdialects>Core,LanMan,NT</smbdialects>
+			<netBIOSSMB />
+			<!--  WINS>
+				<primary>192.168.4.245</primary>
+			</WINS -->
+			<comment>LinkAPP CIFS Server</comment>
+			<!--
+      <Win32NetBIOS lana="6"/>
+      -->
+			<Win32NetBIOS />
+			<Win32Announce interval="5" />
+
+			<!--  root 用户 设置  -->
+
+			<netBIOSSMB platforms="linux,macosx,solaris" />
+			<tcpipSMB platforms="linux,macosx,solaris" />
+
+			<!--  非 root 用户    设置   on linux, Mac OS X, Solaris -->
+			<!--
+				<netBIOSSMB sessionPort="1139" namePort="1137" datagramPort="1138"
+				platforms="linux,macosx,solaris"/> <tcpipSMB port="1445"
+				platforms="linux,macosx,solaris"/>
+			-->
+			<hostAnnounce interval="5" />
+		</host>
+		
+	
+		<sessionDebug flags="Negotiate,Socket,Tree" />
+		
+		<!--  netbiosDebug / -->
+		<announceDebug />
+		  
+      
+		<authenticator type="enterprise">
+			<mode>USER</mode>
+			<NOallowGuest/>
+			<Debug />
+		</authenticator>
+
+	</SMB>
+
+	<FTP>
+		<port>21</port>
+		<allowAnonymous/>
+		<rootDirectory>/usr/linkapp/data/linkapp/archive/view/ftp</rootDirectory>
+		<debug flags="File,Search,Error,DataPort,Directory" />
+	</FTP>
+
+	<NFS>
+		<enablePortMapper />
+		<debug flags="File,FileIO" />
+	</NFS>
+
+	<debug>
+		<output>
+			<class>org.alfresco.jlan.debug.ConsoleDebug</class>
+			<logFile>jlansrv.log</logFile>
+			<append />
+		</output>
+	</debug>
+
+	<shares>
+	<!-- 
+	<diskshare name="我的文件" comment="JDBC virtual filesystem using BLOB">
+		<driver>
+			<class>org.alfresco.jlan.server.filesys.db.DBDiskDriver</class>
+			<CacheTime>300</CacheTime>
+			<Debug/>
+        
+			<DatabaseInterface>
+			  <class>org.alfresco.jlan.server.filesys.db.mysql.MySQLDBInterface</class>
+			  <DSN>jdbc:mysql://localhost/data_linkapp</DSN>
+			  <Username>root</Username>
+			  <Password>mysql2012</Password>
+			  <ConnectionPool>10:20</ConnectionPool>
+			  <FileSystemTable>jweb_filecache</FileSystemTable>
+			  <FileRevisionTable>jweb_filerevision</FileRevisionTable>
+			  <StreamsTable>jweb_JLANStreams</StreamsTable>
+			  <RetentionTable>jweb_JLANRetain</RetentionTable>
+			  <QueueTable>jweb_JLANQueue</QueueTable>
+			  <TransactQueueTable>jweb_JLANTransQueue</TransactQueueTable>
+			  <DataTable>jweb_JLANData</DataTable>
+			  <Debug/>
+			  <SQLDebug/>
+			</DatabaseInterface>
+			
+			<FileLoader>
+				<class>org.alfresco.jlan.server.filesys.db.DBWasFileLoader</class>
+				<ThreadPoolSize>6:2</ThreadPoolSize>
+				<TempDirectory>/usr/linkapp/data/linkapp/archive/view/smb</TempDirectory>
+				<MaximumFilesPerDirectory>1000</MaximumFilesPerDirectory>
+	
+				<SmallFileSize>1024K</SmallFileSize>
+				<FilesPerJar>500</FilesPerJar>
+				<SizePerJar>1024K</SizePerJar>
+				<JarCompressionLevel>0</JarCompressionLevel>
+			  
+				<Debug/>
+				<noThreadDebug/>
+			</FileLoader>
+		</driver>
+		<size totalSize="100G"/>
+	</diskshare>
+
+	<diskshare name="我收到的共享文件" comment="JDBC virtual filesystem using BLOB">
+		<driver>
+			<class>org.alfresco.jlan.server.filesys.db.DBDiskDriver</class>
+			<CacheTime>300</CacheTime>
+			<Debug/>
+        
+			<DatabaseInterface>
+			  <class>org.alfresco.jlan.server.filesys.db.mysql.MySQLDBShareInterface</class>
+			  <DSN>jdbc:mysql://localhost/data_linkapp</DSN>
+			  <Username>root</Username>
+			  <Password>mysql2012</Password>
+			  <ConnectionPool>10:20</ConnectionPool>
+			  <FileSystemTable>jweb_sharefilecache</FileSystemTable>
+			  <FileRevisionTable>jweb_sharefilerevision</FileRevisionTable>
+			  <StreamsTable>jweb_JLANStreamsShare</StreamsTable>
+			  <RetentionTable>jweb_JLANRetainShare</RetentionTable>
+			  <QueueTable>jweb_JLANQueueShare</QueueTable>
+			  <TransactQueueTable>jweb_JLANTransQueueShare</TransactQueueTable>
+			  <DataTable>jweb_JLANDataShare</DataTable>
+			  <Debug/>
+			  <SQLDebug/>
+			</DatabaseInterface>
+			
+			<FileLoader>
+				<class>org.alfresco.jlan.server.filesys.db.DBWasFileLoader</class>
+				<ThreadPoolSize>6:2</ThreadPoolSize>
+				<TempDirectory>/usr/linkapp/data/linkapp/archive/view/smbshare</TempDirectory>
+				<MaximumFilesPerDirectory>1000</MaximumFilesPerDirectory>
+	
+				<SmallFileSize>1024K</SmallFileSize>
+				<FilesPerJar>500</FilesPerJar>
+				<SizePerJar>1024K</SizePerJar>
+				<JarCompressionLevel>0</JarCompressionLevel>			  
+				<Debug/>
+				<noThreadDebug/>
+			</FileLoader>
+		</driver>
+		<size totalSize="10G"/>
+	</diskshare>
+ -->
+	<!-- 资料库  
+	<diskshare name="资料库" comment="JDBC virtual filesystem using BLOB">
+		<driver>
+			<class>org.alfresco.jlan.server.filesys.db.DBDiskDriver</class>
+			<CacheTime>-1</CacheTime>
+			<Debug/>
+        
+			<DatabaseInterface>
+			  <class>org.alfresco.jlan.server.filesys.db.mysql.MySQLDBCommonInterface</class>
+			  <DSN>jdbc:mysql://localhost/data_linkapp</DSN>
+			  <Username>root</Username>
+			  <Password>mysql2012</Password>
+			  <ConnectionPool>10:20</ConnectionPool>
+			  <FileSystemTable>jweb_commonfilecache</FileSystemTable>
+			  <FileRevisionTable>jweb_commonfilerevision</FileRevisionTable>
+			  <StreamsTable>jweb_JLANStreamsCommon</StreamsTable>
+			  <RetentionTable>jweb_JLANRetainCommon</RetentionTable>
+			  <QueueTable>jweb_JLANQueueCommon</QueueTable>
+			  <TransactQueueTable>jweb_JLANTransQueueCommon</TransactQueueTable>
+			  <DataTable>jweb_JLANDataCommon</DataTable>
+			  <Debug/>
+			  <SQLDebug/>
+			</DatabaseInterface>
+			
+			<FileLoader>
+				<class>org.alfresco.jlan.server.filesys.db.DBFileLoader</class>
+				<ThreadPoolSize>6:2</ThreadPoolSize>
+				<TempDirectory>/usr/linkapp/data/linkapp/archive/view/smbcommon</TempDirectory>
+				<MaximumFilesPerDirectory>1000</MaximumFilesPerDirectory>
+	
+				<SmallFileSize>1024K</SmallFileSize>
+				<FilesPerJar>500</FilesPerJar>
+				<SizePerJar>1024K</SizePerJar>
+				<JarCompressionLevel>0</JarCompressionLevel>
+			  	<Debug/>
+				<noThreadDebug/>
+			</FileLoader>
+		</driver>
+		<size totalSize="2000G"/>
+	</diskshare>
+	-->
+	<diskshare name="was_userfile" comment="JDBC virtual filesystem using BLOB">
+		<driver>
+			<class>org.alfresco.jlan.server.filesys.db.DBDiskWasDriver</class>
+			<CacheTime>300</CacheTime>
+			<Debug/>
+        
+			<DatabaseInterface>
+			  <class>org.alfresco.jlan.server.filesys.db.mysql.was.MySQLDBWasInterface</class>
+			  <DSN>jdbc:mysql://localhost/data_linkapp</DSN>
+			  <Username>root</Username>
+			  <Password>mysql2012</Password>
+			  <ConnectionPool>10:20</ConnectionPool>
+			  <FileSystemTable>jweb_was_tempfile</FileSystemTable>
+			  <FileRevisionTable>jweb_filerevision</FileRevisionTable>
+			  <StreamsTable>jweb_JLAN_WasUser_Streams</StreamsTable>
+			  <RetentionTable>jweb_JLAN_WasUser_Retain</RetentionTable>
+			  <QueueTable>jweb_JLAN_WasUser_Queue</QueueTable>
+			  <TransactQueueTable>jweb_JLAN_WasUser_TransQueue</TransactQueueTable>
+			  <DataTable>jweb_JLAN_WasUser_Data</DataTable>
+			  <Debug/>
+			  <SQLDebug/>
+			</DatabaseInterface>
+			
+			<FileLoader>
+				<class>org.alfresco.jlan.server.filesys.db.DBWasFileLoader</class>
+				<ThreadPoolSize>6:2</ThreadPoolSize>
+				<TempDirectory>/usr/linkapp/data/linkapp/archive/view/smb</TempDirectory>
+				<MaximumFilesPerDirectory>1000</MaximumFilesPerDirectory>
+	
+				<SmallFileSize>1024K</SmallFileSize>
+				<FilesPerJar>500</FilesPerJar>
+				<SizePerJar>1024K</SizePerJar>
+				<JarCompressionLevel>0</JarCompressionLevel>
+			  
+				<Debug/>
+				<noThreadDebug/>
+			</FileLoader>
+		</driver>
+		<size totalSize="100G"/>
+	</diskshare>
+
+	<diskshare name="was_sharefile" comment="JDBC virtual filesystem using BLOB">
+		<driver>
+			<class>org.alfresco.jlan.server.filesys.db.DBDiskWasDriver</class>
+			<CacheTime>300</CacheTime>
+			<Debug/>
+			<accessControl default="user">
+				<user ParameterAccess="2" name="test1"></user>
+			</accessControl>
+        
+			<DatabaseInterface>
+			  <class>org.alfresco.jlan.server.filesys.db.mysql.was.MySQLDBWasShareInterface</class>
+			  <DSN>jdbc:mysql://localhost/data_linkapp</DSN>
+			  <Username>root</Username>
+			  <Password>mysql2012</Password>
+			  <ConnectionPool>10:20</ConnectionPool>
+			  <FileSystemTable>jweb_was_tempfile</FileSystemTable>
+			  <FileRevisionTable>jweb_sharefilerevision</FileRevisionTable>
+			  <StreamsTable>jweb_JLAN_WasShare_Streams</StreamsTable>
+			  <RetentionTable>jweb_JLAN_WasShare_Retain</RetentionTable>
+			  <QueueTable>jweb_JLAN_WasShare_Queue</QueueTable>
+			  <TransactQueueTable>jweb_JLAN_WasShare_TransQueue</TransactQueueTable>
+			  <DataTable>jweb_JLAN_WasShare_Data</DataTable>
+			  <Debug/>
+			  <SQLDebug/>
+			</DatabaseInterface>
+			
+			<FileLoader>
+				<class>org.alfresco.jlan.server.filesys.db.DBWasFileLoader</class>
+				<ThreadPoolSize>6:2</ThreadPoolSize>
+				<TempDirectory>/usr/linkapp/data/linkapp/archive/view/smbshare</TempDirectory>
+				<MaximumFilesPerDirectory>1000</MaximumFilesPerDirectory>
+	
+				<SmallFileSize>1024K</SmallFileSize>
+				<FilesPerJar>500</FilesPerJar>
+				<SizePerJar>1024K</SizePerJar>
+				<JarCompressionLevel>0</JarCompressionLevel>			  
+				<Debug/>
+				<noThreadDebug/>
+			</FileLoader>
+		</driver>
+		<size totalSize="10G"/>
+	</diskshare>
+
+	<!-- 公共资料库 -->
+	<diskshare name="was_commonfile" comment="JDBC virtual filesystem using BLOB">
+		<driver>
+			<class>org.alfresco.jlan.server.filesys.db.DBDiskWasDriver</class>
+			<CacheTime>-1</CacheTime>
+			<Debug/>
+        
+			<DatabaseInterface>
+			  <class>org.alfresco.jlan.server.filesys.db.mysql.was.MySQLDBWasCommonInterface</class>
+			  <DSN>jdbc:mysql://localhost/data_linkapp</DSN>
+			  <Username>root</Username>
+			  <Password>mysql2012</Password>
+			  <ConnectionPool>10:20</ConnectionPool>
+			  <FileSystemTable>jweb_was_tempfile</FileSystemTable>
+			  <FileRevisionTable>jweb_commonfilerevision</FileRevisionTable>
+			  <StreamsTable>jweb_JLAN_WasCommon_Streams</StreamsTable>
+			  <RetentionTable>jweb_JLAN_WasCommon_Retain</RetentionTable>
+			  <QueueTable>jweb_JLAN_WasCommon_Queue</QueueTable>
+			  <TransactQueueTable>jweb_JLAN_WasCommon_TransQueue</TransactQueueTable>
+			  <DataTable>jweb_JLAN_WasCommon_Data</DataTable>
+			  <Debug/>
+			  <SQLDebug/>
+			</DatabaseInterface>
+			
+			<FileLoader>
+				<class>org.alfresco.jlan.server.filesys.db.DBWasFileLoader</class>
+				<ThreadPoolSize>6:2</ThreadPoolSize>
+				<TempDirectory>/usr/linkapp/data/linkapp/archive/view/smbcommon</TempDirectory>
+				<MaximumFilesPerDirectory>1000</MaximumFilesPerDirectory>
+	
+				<SmallFileSize>1024K</SmallFileSize>
+				<FilesPerJar>500</FilesPerJar>
+				<SizePerJar>1024K</SizePerJar>
+				<JarCompressionLevel>0</JarCompressionLevel>
+			  	<Debug/>
+				<noThreadDebug/>
+			</FileLoader>
+		</driver>
+		<size totalSize="2000G"/>
+	</diskshare>
+	
+
+	</shares>
+
+
+	<security>
+        <model>enterprise</model>
+		<JCEProvider>cryptix.jce.provider.CryptixCrypto</JCEProvider>
+		<authenticator>
+      		<class>org.alfresco.jlan.server.auth.passthru.PassthruAuthenticator </class>
+      		<mode>USER</mode>
+    	</authenticator>
+    	<NOallowGuest/>
+    	<Debug/>
+	</security>
+	
+	<shareMapper>
+	<class>org.alfresco.jlan.sample.HomeShareMapper</class>
+	<debug/>
+	</shareMapper>
+	
+</jlanserver>

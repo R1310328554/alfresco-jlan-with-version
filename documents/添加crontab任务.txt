@@ -1,0 +1,8 @@
+将nas_monitor.sh放置到/usr/linkapp/bin/tomcat-nas/bin/目录下，然后执行：
+
+1 /usr/linkapp/bin/tomcat-nas/bin/nas_monitor.sh 要有x权限：
+chmod 700 /usr/linkapp/bin/tomcat-nas/bin/nas_monitor.sh
+
+2 添加定时任务：这个用来检测nas进程， 如果异常终止则拉起，每2分钟检测一次， 当然这个时间你们可以改：
+crontab -e
+*/2 * * * * /usr/linkapp/bin/tomcat-nas/bin/nas_monitor.sh
