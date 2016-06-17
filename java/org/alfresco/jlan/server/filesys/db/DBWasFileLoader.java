@@ -59,6 +59,7 @@ import org.springframework.extensions.config.ConfigElement;
 import org.apache.log4j.Logger;
 
 import com.util.DBUtil;
+import com.util.DiskUtil;
 
 /**
  * Database File Data Loader Class
@@ -920,8 +921,9 @@ public class DBWasFileLoader implements FileLoader, BackgroundFileLoader,
 //		DBDataDetails dataDetails =getDBDataInterface().getFileDataDetails(loadReq.getFileId(), loadReq.getStreamId());
 //		
 //		log4j.debug("DBF#loadFile() isStoredInJar:" + dataDetails.isStoredInJar()+" ,dataDetails:"+dataDetails);
-		
-		int returnSts = getDBDataInterface().loadFileData(loadReq.getFileId(), loadReq.getStreamId(), fileSeg,null);
+
+		String sharePath = DiskUtil.findFristPath(loadReq.getVirtualPath());
+		int returnSts = getDBDataInterface().loadFileData(loadReq.getFileId(), loadReq.getStreamId(), fileSeg,sharePath);
 //		loadSts = returnSts;
 		loadSts = StsSuccess;//直接返回成功		
 		if (loadSts == StsSuccess) {
@@ -1324,7 +1326,6 @@ public class DBWasFileLoader implements FileLoader, BackgroundFileLoader,
 		int saveSts = StsError;
 
 		if (req instanceof SingleFileRequest) {
-
 			// Process a single file save request
 
 			SingleFileRequest singleReq = (SingleFileRequest) req;
@@ -1343,7 +1344,6 @@ public class DBWasFileLoader implements FileLoader, BackgroundFileLoader,
 
 		else if (req instanceof MultipleFileRequest) {
 			// Process a multi file save request
-
 			MultipleFileRequest multiReq = (MultipleFileRequest) req;
 
 			saveSts = storeMultipleFile(multiReq);
@@ -1426,13 +1426,16 @@ public class DBWasFileLoader implements FileLoader, BackgroundFileLoader,
 
 		// Update the segment status
 		fileSeg.setStatus(FileSegmentInfo.Saved, false);
+		
+		String virtualPath = saveReq.getVirtualPath();
+		String fristPath = DiskUtil.findFristPath(virtualPath);
 
 		// Indicate that the file save request was processed
 		String Filepath = m_curTempDir.getPath();
 		try {
 			getDBDataInterface().saveFileArchive(null, Filepath,
 					saveReq.getFileId(), tempFile,
-					m_dbCtx.getShareName(), fileSeg);
+					fristPath, fileSeg, null);
 		} catch (DBException ex) {
 			log4j.error(ex);
 		} catch (IOException ex) {
@@ -1518,7 +1521,7 @@ public class DBWasFileLoader implements FileLoader, BackgroundFileLoader,
 							getDBDataInterface().saveFileArchive(null,
 									Filepath, finfo.getFileId(),
 									tmpFile, m_dbCtx.getShareName(),
-									fileSeg);// 应该放在for外围执行,并且要多行一起保存。效率还高
+									fileSeg, null);// 应该放在for外围执行,并且要多行一起保存。效率还高
 						} else {
 							log4j
 									.error("Failed to store  , tmpFile not exists :  fileId:"
@@ -1613,11 +1616,15 @@ public class DBWasFileLoader implements FileLoader, BackgroundFileLoader,
 //		JarOutputStream outJar = null;
 		
 		DBDataDetailsList fileList = new DBDataDetailsList();
+		
+		String sharePathV = "";
+		
 		try {
 
 			// Create the Jar file in the temporary cache area
 			// Write each temporary file to the Jar file
 
+			
 			for (int i = 0; i < saveReq.getNumberOfFiles(); i++) {
 
 				// Get the current temporary file
@@ -1625,6 +1632,21 @@ public class DBWasFileLoader implements FileLoader, BackgroundFileLoader,
 				CachedFileInfo finfo = saveReq.getFileInfo(i);
 				FileState fstate = finfo.getFileState();
 
+
+				String v = finfo.getVirtualPath().toLowerCase();
+				String sn = "commonfile";
+				if (v.contains(sn)) {
+					sharePathV = sn;
+				}
+				sn = "userfile";
+				if (v.contains(sn)) {
+					sharePathV = sn;
+				}
+				sn = "sharefile";
+				if (v.contains(sn)) {
+					sharePathV = sn;
+				}
+				
 				// DEBUG
 
 				log4j.debug("DBF#storeMultipleFile() ["+i+"] info=" + finfo + ", fstate=" + fstate);
@@ -1708,7 +1730,15 @@ public class DBWasFileLoader implements FileLoader, BackgroundFileLoader,
 */
 			// Save the Jar file data to the database
 
-			getDBDataInterface().saveJarData(jarFileList, fileList,m_dbCtx.getShareName());
+			
+			String shareeee = m_dbCtx.getShareName();
+			
+			if (!sharePathV.equals("")) {
+				shareeee = sharePathV;
+				log4j.debug("SHAREPATHV  " +sharePathV);
+			}
+			getDBDataInterface().saveJarData(jarFileList, fileList,shareeee);
+
 
 			// Indicate that the database update was successful
 

@@ -530,7 +530,7 @@ public class TransactBuffer {
 	 * @return String
 	 */
 	public String toString() {
-		StringBuffer str = new StringBuffer();
+		StringBuffer str = new StringBuffer(100);
 		
 		str.append("[");
 		

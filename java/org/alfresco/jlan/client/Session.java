@@ -1135,7 +1135,7 @@ public class Session {
 	 * @return Session details string
 	 */
 	public String toString() {
-		StringBuffer str = new StringBuffer();
+		StringBuffer str = new StringBuffer(30);
 
 		str.append("[\\\\");
 		str.append(getServer());

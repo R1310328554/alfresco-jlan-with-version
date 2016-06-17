@@ -209,7 +209,7 @@ public class SingleFileRequest extends FileRequest {
 	 * @return String
 	 */
 	public String toString() {
-		StringBuffer str = new StringBuffer();
+		StringBuffer str = new StringBuffer(80);
 		
 		str.append("[FID=");
 		str.append(getFileId());

@@ -116,7 +116,6 @@ public class CoreFile extends SMBFile {
 
 		m_rxpkt = null;
 		m_txpkt = null;
-		return;
 	}
 
 	/**

@@ -49,7 +49,7 @@ public class FileParser extends TikaParser{
 		} catch (IOException e) {
 			logger.error("提取内容IOException,fileName="+fileName);
 		} catch (TikaException e) {
-			logger.error("提取内容TikaException,fileName="+fileName);
+			logger.error("提取内容TikaException,fileName="+fileName);//CB4C0445.tmp
 		} catch(Exception e)
 		{
 			logger.error("提取内容Exception,fileName="+fileName);

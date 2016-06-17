@@ -65,7 +65,7 @@ public class NTLanManAuthContext extends ChallengeAuthContext {
    */
   public String toString() {
 
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(32);
 
     str.append("[NTLM,Challenge=");
     str.append(HexDump.hexString(m_challenge));

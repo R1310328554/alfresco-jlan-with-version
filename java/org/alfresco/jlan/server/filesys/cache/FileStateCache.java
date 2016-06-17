@@ -56,12 +56,13 @@ public abstract class FileStateCache {
 
 	// Default expire check thread interval, in ms
 
-	protected static final long DefaultExpireCheckInterval = 60000; // 1 minute
-	protected static final long MinimumExpireCheckInterval = 5000;	// 5 secs
+	protected static final long DefaultExpireCheckInterval = 60000; // 1 minute—缩减缓存失效时间至5s，20150606
+	protected static final long MinimumExpireCheckInterval = 5000;	// 5 secs—缩减缓存失效时间至5s，20150606
 
 	// Default file state expiry interval, in ms
 	
-	protected static final long DefaultFileStateExpireInterval = 5 * 60000L;	// 5 mins
+	
+	protected static final long DefaultFileStateExpireInterval = 5*60000L;	// 5 mins—缩减缓存失效时间至5s，20150606
 	protected static final long MinimumFileStateExpireInterval = 15000;			// 15 secs
 	
 	// Wakeup interval for the expire file state checker thread

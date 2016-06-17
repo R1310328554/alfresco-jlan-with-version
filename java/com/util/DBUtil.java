@@ -37,6 +37,13 @@ public class DBUtil {
 	public static final String WAS_USERMYFILE="was_usermyfile";
 	public static String userSharesQuery_all_sql = "SELECT id as id,username as name,DATE_FORMAT(lastvisit,'%Y%m%d %H:%i:%s') AS createtime,status FROM jweb_users WHERE status>=0 ORDER BY id limit 0,200";
 	public static final String CLOUDURL="文件云.url";
+	
+	public final static String SHARENAME_WAS = "was";
+	public final static String SHARENAME_WAS_USERFILE = "userfile";
+	public final static String SHARENAME_WAS_COMMFILE = "commonfile";
+	public final static String SHARENAME_WAS_RECIVEFILE = "sharefile";
+	public static String WAS_LOCALUSER_PREFIX="linkapp_";//云编辑服务器的，本机用户的前缀，增加这个是为了当为云编辑服务器访问NAS时，方便让认证通过
+	
 	/**
 	 * 初始化(启动应用时初始一次即可，减少重复)
 	 */
@@ -90,6 +97,10 @@ public class DBUtil {
 			if(null != prop.getProperty("sql.userSharesQueryAll"))
 			{
 				userSharesQuery_all_sql = prop.getProperty("sql.userSharesQueryAll");
+			}
+			if(null != prop.getProperty("was.localuser.prefix"))
+			{
+				WAS_LOCALUSER_PREFIX = prop.getProperty("was.localuser.prefix").toLowerCase();
 			}
 			System.out.println("**********初始化完成********");
 		}catch(FileNotFoundException e1)

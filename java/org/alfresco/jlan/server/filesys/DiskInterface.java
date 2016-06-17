@@ -249,4 +249,6 @@ public interface DiskInterface extends DeviceInterface {
   public int writeFile(SrvSession sess, TreeConnection tree, NetworkFile file, byte[] buf, int bufoff, int siz,
     									 long fileoff)
     throws java.io.IOException;
+
+//  public void reloadFile();
 }

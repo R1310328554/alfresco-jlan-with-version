@@ -951,7 +951,7 @@ public class AuthenticateSession {
    * @return   Session details string
    */
   public String toString() {
-  	StringBuffer str = new StringBuffer();
+  	StringBuffer str = new StringBuffer(40);
   	
   	str.append("[\\\\");
   	str.append(getServer());

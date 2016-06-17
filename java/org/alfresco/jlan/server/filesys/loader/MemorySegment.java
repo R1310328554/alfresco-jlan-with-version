@@ -182,7 +182,7 @@ public class MemorySegment {
 	 * @return String
 	 */
 	public String toString() {
-		StringBuffer str = new StringBuffer();
+		StringBuffer str = new StringBuffer(40);
 		str.append("[len=");
 		str.append(getLength());
 		str.append(",fileOff=");

@@ -130,7 +130,7 @@ public class KerberosDetails {
    */
   public String toString() {
 
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(70);
 
     str.append("[Source=");
     str.append(getSourceName());

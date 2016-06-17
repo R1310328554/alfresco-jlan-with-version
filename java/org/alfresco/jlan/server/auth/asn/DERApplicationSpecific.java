@@ -125,7 +125,7 @@ public class DERApplicationSpecific extends DERObject {
    * @return String
    */
   public String toString() {
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(30);
     
     str.append("[ApplicationSpecific:");
     str.append(m_bytes != null ? m_bytes.length : 0);

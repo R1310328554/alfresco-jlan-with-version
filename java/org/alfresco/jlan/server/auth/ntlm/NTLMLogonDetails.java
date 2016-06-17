@@ -250,7 +250,7 @@ public class NTLMLogonDetails implements Serializable
    * @return String
    */
   public String toString() {
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(50);
     
     str.append("[");
     str.append(getUserName());

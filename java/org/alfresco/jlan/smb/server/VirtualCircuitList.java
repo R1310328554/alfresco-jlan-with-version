@@ -39,10 +39,13 @@ public class VirtualCircuitList {
   //  Default and maximum number of virtual circuits
 
   public static final int DefaultCircuits = 4;
-  public static final int DefMaxCircuits  = 16;
+//  public static final int DefMaxCircuits  = 16;
+  public static final int DefMaxCircuits  = 1600;//默认情况下，Circuits的最大数量
+  
   
   public static final int MinCircuits	  = 4;
-  public static final int MaxCircuits     = 2000;
+//  public static final int MaxCircuits     = 2000;
+  public static final int MaxCircuits     = 20000;
 
   //  UIDs are 16bit values
   
@@ -225,6 +228,15 @@ public class VirtualCircuitList {
 
       m_vcircuits.clear();
     }
+  }
+  
+  /**
+   * 
+   * 获取所有的VirtualCircuit map
+   * @return
+   */
+  public Map<Integer, VirtualCircuit> getVcircuits() {
+	  return m_vcircuits;
   }
   
   /**

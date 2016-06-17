@@ -123,7 +123,7 @@ public class RetentionDetails {
    * @return String
    */
   public String toString() {
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(50);
     
     str.append("[FID=");
     str.append(getFileId());

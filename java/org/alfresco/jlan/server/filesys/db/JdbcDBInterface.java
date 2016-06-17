@@ -20,11 +20,14 @@
 package org.alfresco.jlan.server.filesys.db;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.Set;
 
 import org.alfresco.jlan.debug.Debug;
 import org.alfresco.jlan.server.config.InvalidConfigurationException;
+import org.alfresco.jlan.server.filesys.FileExistsException;
 import org.alfresco.jlan.server.filesys.FileInfo;
 import org.alfresco.jlan.server.filesys.loader.DeleteFileRequest;
 import org.alfresco.jlan.server.filesys.loader.FileRequest;
@@ -1203,4 +1206,31 @@ public abstract class JdbcDBInterface implements DBInterface, DBConnectionPoolLi
     throw new DBException("Feature not implemented");
   }
   
+
+	public int getBaseFileId() {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	public String getFileRenamed() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	public void setBaseFileId(int i) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	public Set<String> resetFileRenamed(String fileName) {
+		return null;
+	}
+
+
+	public long renameFolderRecord(long newDirId, long oldDirId, long fId, int userId, String newName,
+			String shareName, String ipAddress) throws DBException, FileNotFoundException, FileExistsException {
+		return -1;
+	}
+
+		
 }

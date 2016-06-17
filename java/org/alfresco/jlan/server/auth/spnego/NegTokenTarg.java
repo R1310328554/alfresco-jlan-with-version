@@ -252,7 +252,7 @@ public class NegTokenTarg {
    */
   public String toString() {
 
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(80);
 
     str.append("[NegtokenTarg result=");
     str.append(SPNEGO.asResultString(getResult()));

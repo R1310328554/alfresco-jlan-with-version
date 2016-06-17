@@ -1247,7 +1247,7 @@ public class SMBPacket {
     if ( flags == 0)
      	return "<None>";
     
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(60);
     if ((flags & FLG_SUBDIALECT) != 0)
       str.append("SubDialect,");
     
@@ -1285,7 +1285,7 @@ public class SMBPacket {
     if ( flags2 == 0)
       return "<None>";
     
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(70);
     
     if (( flags2 & FLG2_LONGFILENAMES) != 0)
       str.append("LongFilenames,");

@@ -140,7 +140,6 @@ public final class DataPipeFile extends SMBFile {
 		// Close the associated session
 
 		getSession().CloseSession();
-		return;
 	}
 
 	/**

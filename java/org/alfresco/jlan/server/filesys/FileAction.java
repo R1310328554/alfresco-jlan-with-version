@@ -92,7 +92,7 @@ public final class FileAction {
    * @return String
    */
   public final static String asString(int flags) {
-  	StringBuffer str = new StringBuffer();
+  	StringBuffer str = new StringBuffer(60);
   	
   	str.append("[0x");
   	str.append(Integer.toHexString(flags));

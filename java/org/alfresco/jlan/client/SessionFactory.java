@@ -1980,7 +1980,10 @@ public final class SessionFactory {
 
 		int pid = getSessionId();
 
-		StringBuffer nameBuf = new StringBuffer(InetAddress.getLocalHost().getHostName() + "_" + pid);
+		//StringBuffer nameBuf = new StringBuffer(InetAddress.getLocalHost().getHostName() + "_" + pid);
+        StringBuffer nameBuf = new StringBuffer(InetAddress.getLocalHost().getHostName());
+        nameBuf.append("_").append(pid);
+
 		String localName = nameBuf.toString();
 
 		// Debug
@@ -2216,7 +2219,10 @@ public final class SessionFactory {
 
 		int pid = getSessionId();
 
-		StringBuffer nameBuf = new StringBuffer(InetAddress.getLocalHost().getHostName() + "_" + pid);
+		//StringBuffer nameBuf = new StringBuffer(InetAddress.getLocalHost().getHostName() + "_" + pid);
+        StringBuffer nameBuf = new StringBuffer(InetAddress.getLocalHost().getHostName());
+        nameBuf.append("_").append(pid);
+
 		String localName = nameBuf.toString();
 
 		// Debug

@@ -114,7 +114,7 @@ public class DERGeneralizedTime extends DERObject {
    * @return String
    */
   public String toString() {
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(30);
     
     str.append("[GeneralizedTime:");
     str.append(m_string);

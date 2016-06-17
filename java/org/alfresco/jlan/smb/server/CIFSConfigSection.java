@@ -828,7 +828,7 @@ public class CIFSConfigSection extends ConfigSection {
 
       //  Inform listeners, validate the configuration change
 
-      sts = fireConfigurationChange(ConfigId.SMBAnnceEnable, new Boolean(b));
+      sts = fireConfigurationChange(ConfigId.SMBAnnceEnable, Boolean.valueOf(b));
       m_announce = b;
     }
         
@@ -935,7 +935,7 @@ public class CIFSConfigSection extends ConfigSection {
 
       //  Inform listeners, validate the configuration change
   
-      sts = fireConfigurationChange(ConfigId.NetBIOSDebugEnable, new Boolean(ena));
+      sts = fireConfigurationChange(ConfigId.NetBIOSDebugEnable, Boolean.valueOf(ena));
       m_nbDebug = ena;
     }
     
@@ -962,7 +962,7 @@ public class CIFSConfigSection extends ConfigSection {
 
       //  Inform listeners, validate the configuration change
 
-      sts = fireConfigurationChange(ConfigId.SMBAnnceDebug, new Boolean(ena));
+      sts = fireConfigurationChange(ConfigId.SMBAnnceDebug, Boolean.valueOf(ena));
       m_announceDebug = ena;
     }
     
@@ -989,7 +989,7 @@ public class CIFSConfigSection extends ConfigSection {
 
       //  Inform listeners, validate the configuration change
 
-      sts = fireConfigurationChange(ConfigId.SMBMacExtEnable, new Boolean(ena));
+      sts = fireConfigurationChange(ConfigId.SMBMacExtEnable, Boolean.valueOf(ena));
       m_macExtensions = ena;
     }
     
@@ -1165,7 +1165,7 @@ public class CIFSConfigSection extends ConfigSection {
       
       //  Inform listeners, validate the configuration change
       
-      sts = fireConfigurationChange(ConfigId.SMBNetBIOSEnable, new Boolean(ena));
+      sts = fireConfigurationChange(ConfigId.SMBNetBIOSEnable, Boolean.valueOf(ena));
       m_netBIOSEnable = ena;
     }
     
@@ -1192,7 +1192,7 @@ public class CIFSConfigSection extends ConfigSection {
       
       //  Inform listeners, validate the configuration change
       
-      sts = fireConfigurationChange(ConfigId.SMBTCPEnable, new Boolean(ena));
+      sts = fireConfigurationChange(ConfigId.SMBTCPEnable, Boolean.valueOf(ena));
       m_tcpSMBEnable = ena;
     }
     
@@ -1219,7 +1219,7 @@ public class CIFSConfigSection extends ConfigSection {
       
       //  Inform listeners, validate the configuration change
       
-      sts = fireConfigurationChange(ConfigId.SMBWin32NetBIOS, new Boolean(ena));
+      sts = fireConfigurationChange(ConfigId.SMBWin32NetBIOS, Boolean.valueOf(ena));
       m_win32NBEnable = ena;
     }
     
@@ -1286,7 +1286,7 @@ public class CIFSConfigSection extends ConfigSection {
 
       //  Inform listeners, validate the configuration change
 
-      sts = fireConfigurationChange(ConfigId.SMBWin32NBAnnounce, new Boolean(b));
+      sts = fireConfigurationChange(ConfigId.SMBWin32NBAnnounce, Boolean.valueOf(b));
       m_win32NBAnnounce = b;
     }
         
@@ -1347,7 +1347,7 @@ public class CIFSConfigSection extends ConfigSection {
     
     //  Inform listeners, validate the configuration change
 
-    int sts = fireConfigurationChange(ConfigId.SMBWin32NBWinsock, new Boolean(useWinsock));
+    int sts = fireConfigurationChange(ConfigId.SMBWin32NBWinsock, Boolean.valueOf(useWinsock));
     m_win32NBUseWinsock = useWinsock;
     
     //  Return the change status
@@ -1427,7 +1427,7 @@ public class CIFSConfigSection extends ConfigSection {
 
 	  //  Inform listeners, validate the configuration change
 	
-	  int sts = fireConfigurationChange(ConfigId.SMBDisableNIO, new Boolean( disableNIO));
+	  int sts = fireConfigurationChange(ConfigId.SMBDisableNIO, Boolean.valueOf( disableNIO));
 	  m_disableNIO = disableNIO;
 	
 	  //  Return the change status

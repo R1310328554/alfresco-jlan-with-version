@@ -102,7 +102,8 @@ public class NetBIOS {
   //	Various constants
   
   public final static int NCBNameSize		= 16;
-  public final static int MaxLANA				= 254;
+//  public final static int MaxLANA				= 254;
+  public final static int MaxLANA				= 2540;
   
   public final static int NameFlagsMask	= 0x87;
   

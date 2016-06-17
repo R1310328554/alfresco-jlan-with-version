@@ -1,11 +1,3 @@
-/*
- * Copyright (c) LinkApp Team All rights reserved.
- * 版权归LinkApp研发团队所有
- * 任何的侵权、盗版行为均将追究其法律责任
- * 
- * The LinkApp Project
- * http://www.linkapp.cn
- */
 
 package org.alfresco.jlan.server.filesys.db.mysql;
 
@@ -17,6 +9,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.sql.Blob;
+import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.Date;
@@ -25,19 +18,23 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.text.SimpleDateFormat;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 
 import javax.servlet.ServletContext;
 
 import net.sf.ehcache.Cache;
 import net.sf.ehcache.CacheManager;
 import net.sf.ehcache.Element;
+
 import org.alfresco.jlan.server.config.InvalidConfigurationException;
 import org.alfresco.jlan.server.filesys.AccessDeniedException;
 import org.alfresco.jlan.server.filesys.DiskFullException;
@@ -50,6 +47,7 @@ import org.alfresco.jlan.server.filesys.FileOpenParams;
 import org.alfresco.jlan.server.filesys.FileStatus;
 import org.alfresco.jlan.server.filesys.FileType;
 import org.alfresco.jlan.server.filesys.cache.FileState;
+import org.alfresco.jlan.server.filesys.db.CachedNetworkFile;
 import org.alfresco.jlan.server.filesys.db.DBDataDetails;
 import org.alfresco.jlan.server.filesys.db.DBDataDetailsList;
 import org.alfresco.jlan.server.filesys.db.DBDataInterface;
@@ -98,49 +96,50 @@ import com.util.StringUtil;
  * mySQL specific implementation of the database interface used by the database
  * filesystem driver (DBDiskDriver).
  * 
- * @author gkspencer
+ * @author gkspencer/LUO KAI
  */
 public class MySQLDBLInterface extends JdbcDBLInterface implements
 		DBQueueInterface, DBDataInterface, DBObjectIdInterface {
 	// Memory buffer maximum size
 
 	public final static long MaxMemoryBuffer = MemorySize.MEGABYTE / 2; // 1/2Mb
-	
 
-	public final static String FileSysTable_MYFILE			= "jweb_filecache";
-	public final static String StreamsTable_MYFILE	    	= "jweb_JLANStreams";
-	public final static String FileRevisionTable_MYFILE	= "jweb_filerevision";
-//	public final static String RetentionTable_MYFILE		= "jweb_JLANRetain";
-//	public final static String QueueTable_MYFILE			= "jweb_JLANQueue";
-//	public final static String TransactQueueTable_MYFILE	= "jweb_JLANTransQueue";
-//	public final static String DataTable_MYFILE			= "jweb_JLANData";
-//	public final static String JarDataTable_MY			= "jweb_JLANJarData";
-//	public final static String ObjectIdTable_MY		= "jweb_JLANObjectIds";
-//	public final static String SymLinkTable_MY       	= "jweb_JLANSymLinks";
-	
-	public final static String FileSysTable_COMMFILE			= "jweb_commonfilecache";
-	public final static String StreamsTable_COMMFILE	    	= "jweb_JLANStreamsCommon";//三种类型都用一个表
-	public final static String FileRevisionTable_COMMFILE	= "jweb_commonfilerevision";
-	public final static String RetentionTable_COMMFILE		= "jweb_JLANRetainCommon";
-	public final static String QueueTable_COMMFILE			= "jweb_JLANQueueCommon";//三种类型都用一个表
-	public final static String TransactQueueTable_COMMFILE	= "jweb_JLANTransQueueCommon";//三种类型都用一个表
-	public final static String DataTable_COMMFILE			= "jweb_JLANDataCommon";
-//	public final static String JarDataTable_COMMFILE			= "jweb_JLANJarData";
-//	public final static String ObjectIdTable_COMMFILE		= "jweb_JLANObjectIds";
-//	public final static String SymLinkTable_COMMFILE       	= "jweb_JLANSymLinks";
-	
-	
-	public final static String FileSysTable_SHAREFILE			= "jweb_sharefilecache";
-	public final static String StreamsTable_SHAREFILE	    	= "jweb_JLANStreamsShare";
-	public final static String FileRevisionTable_SHAREFILE	= "jweb_sharefilerevision";
-//	public final static String RetentionTable_SHAREFILE		= "jweb_JLANRetainShare";
-//	public final static String QueueTable_SHAREFILE			= "jweb_JLANQueueShare";
-//	public final static String TransactQueueTable_SHAREFILE	= "jweb_JLANTransQueueShare";
-//	public final static String DataTable_SHAREFILE			= "jweb_JLANDataShare";
-//	public final static String JarDataTable_SHAREFILE			= "jweb_JLANJarData";
-//	public final static String ObjectIdTable_SHAREFILE		= "jweb_JLANObjectIds";
-//	public final static String SymLinkTable_SHAREFILE       	= "jweb_JLANSymLinks";
+	public final static String FileSysTable_MYFILE = "jweb_filecache";
+	public final static String StreamsTable_MYFILE = "jweb_JLANStreams";
+	public final static String FileRevisionTable_MYFILE = "jweb_filerevision";
+	// public final static String RetentionTable_MYFILE = "jweb_JLANRetain";
+	// public final static String QueueTable_MYFILE = "jweb_JLANQueue";
+	// public final static String TransactQueueTable_MYFILE =
+	// "jweb_JLANTransQueue";
+	// public final static String DataTable_MYFILE = "jweb_JLANData";
+	// public final static String JarDataTable_MY = "jweb_JLANJarData";
+	// public final static String ObjectIdTable_MY = "jweb_JLANObjectIds";
+	// public final static String SymLinkTable_MY = "jweb_JLANSymLinks";
 
+	public final static String FileSysTable_COMMFILE = "jweb_commonfilecache";
+	public final static String StreamsTable_COMMFILE = "jweb_JLANStreamsCommon";// 三种类型都用一个表
+	public final static String FileRevisionTable_COMMFILE = "jweb_commonfilerevision";
+	public final static String RetentionTable_COMMFILE = "jweb_JLANRetainCommon";
+	public final static String QueueTable_COMMFILE = "jweb_JLANQueueCommon";// 三种类型都用一个表
+	public final static String TransactQueueTable_COMMFILE = "jweb_JLANTransQueueCommon";// 三种类型都用一个表
+	public final static String DataTable_COMMFILE = "jweb_JLANDataCommon";
+	// public final static String JarDataTable_COMMFILE = "jweb_JLANJarData";
+	// public final static String ObjectIdTable_COMMFILE = "jweb_JLANObjectIds";
+	// public final static String SymLinkTable_COMMFILE = "jweb_JLANSymLinks";
+
+	public final static String FileSysTable_SHAREFILE = "jweb_sharefilecache";
+	public final static String StreamsTable_SHAREFILE = "jweb_JLANStreamsShare";
+	public final static String FileRevisionTable_SHAREFILE = "jweb_sharefilerevision";
+	// public final static String RetentionTable_SHAREFILE =
+	// "jweb_JLANRetainShare";
+	// public final static String QueueTable_SHAREFILE = "jweb_JLANQueueShare";
+	// public final static String TransactQueueTable_SHAREFILE =
+	// "jweb_JLANTransQueueShare";
+	// public final static String DataTable_SHAREFILE = "jweb_JLANDataShare";
+	// public final static String JarDataTable_SHAREFILE = "jweb_JLANJarData";
+	// public final static String ObjectIdTable_SHAREFILE =
+	// "jweb_JLANObjectIds";
+	// public final static String SymLinkTable_SHAREFILE = "jweb_JLANSymLinks";
 
 	// Lock file name, used to check if server shutdown was clean or not
 
@@ -164,19 +163,29 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	private PreparedStatement m_reqStmt;
 	private PreparedStatement m_tranStmt;
 
+	private int baseFileId;
+
+	private Set<String> fileRenamed;
+
+	private int oldRevision;
+
 	public final static int StsSuccess = 0;
 	public final static int StsRequeue = 1;
 	public final static int StsError = 2;
 
 	public static final String USERSPACE_MAXSIZE = "userspace.maxSize";// 用户空间大小
-	public static final int delFileKeepTime = 10000;// 10000  ms=10s,删除的文件临时保留时长，用于部分软件保存文件时，是先删除原文件，再上传新文件的情况)
+	public static final int delFileKeepTime = 10000;// 10000
+													// ms=10s,删除的文件临时保留时长，用于部分软件保存文件时，是先删除原文件，再上传新文件的情况)
 	public static boolean initData = false;
+	
+	public static boolean cleanTempFileOnStart = true; // 是否启动NAS时候清理临时文件
 
 	/**
 	 * Default constructor
 	 */
 	public MySQLDBLInterface() {
 		super();
+		fileRenamed = new HashSet<String>();
 	}
 
 	/**
@@ -213,12 +222,11 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	public void initializeDatabase(DBDeviceContext dbCtx, ConfigElement params)
 			throws InvalidConfigurationException {
 		// Set the JDBC driver class, must be set before the connection pool is
-		
-		
+
 		// Create the database connection pool
-		//启动后只初始化一次，如果已经初始化过，则不再初始化	
-		
-		if(initData==false)//未初始化过
+		// 启动后只初始化一次，如果已经初始化过，则不再初始化
+
+		if (initData == false)// 未初始化过
 		{
 			// created
 			setDriverName("com.mysql.jdbc.Driver");
@@ -230,7 +238,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			if (getDSNString().indexOf("?autoReconnect=") == -1
 					&& params.getChild("noAutoReconnect") == null)
 				setDSNString(getDSNString() + "?autoReconnect=true");
-			
+
 			try {
 				createConnectionPool();
 			} catch (Exception ex) {
@@ -244,635 +252,694 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				throw new InvalidConfigurationException(
 						"Failed to create connection pool, " + ex.getMessage());
 			}
-			
-		// Check if the file system table exists
 
-		Connection conn = null;
+			// Check if the file system table exists
 
-		try {
+			Connection conn = null;
 
-			// Open a connection to the database
+			try {
 
-			conn = getConnection();
+				// Open a connection to the database
 
-			DatabaseMetaData dbMeta = conn.getMetaData();
-			ResultSet rs = dbMeta.getTables("", "", "", null);
+				conn = getConnection();
 
-//			boolean foundStruct = false;
-			boolean foundStream_myfile = false;
-			boolean foundRetain_myfile = false;
-			boolean foundQueue_myfile = false;
-			boolean foundTrans_myfile = false;
-			boolean foundData_myfile = false;
-			
-			boolean foundJarData = false;
-			boolean foundObjId = false;
-			boolean foundSymLink = false;
-			boolean foundCommonRevisionValue = false;
-			
-			boolean foundStream_commfile = false;
-			boolean foundRetain_commfile = false;
-			boolean foundQueue_commfile = false;
-			boolean foundTrans_commfile = false;
-			boolean foundData_commfile = false;
-			
-			boolean foundStream_sharefile = false;
-			boolean foundRetain_sharefile = false;
-			boolean foundQueue_sharefile = false;
-			boolean foundTrans_sharefile = false;
-			boolean foundData_sharefile = false;
-			
+				DatabaseMetaData dbMeta = conn.getMetaData();
+				ResultSet rs = dbMeta.getTables("", "", "", null);
 
-			while (rs.next()) {
+				// boolean foundStruct = false;
+				boolean foundStream_myfile = false;
+				boolean foundRetain_myfile = false;
+				boolean foundQueue_myfile = false;
+				boolean foundTrans_myfile = false;
+				boolean foundData_myfile = false;
 
-				// Get the table name
+				boolean foundJarData = false;
+				boolean foundObjId = false;
+				boolean foundSymLink = false;
+				boolean foundCommonRevisionValue = false;
 
-				String tblName = rs.getString("TABLE_NAME");
+				boolean foundStream_commfile = false;
+				boolean foundRetain_commfile = false;
+				boolean foundQueue_commfile = false;
+				boolean foundTrans_commfile = false;
+				boolean foundData_commfile = false;
 
-				// Check if we found the filesystem structure or streams table
-/*
-				if (tblName.equalsIgnoreCase(getFileSysTableName()))
-					foundStruct = true;
-				else if (hasStreamsTableName()
-						&& tblName.equalsIgnoreCase(getStreamsTableName()))
-					foundStream = true;
-				else if (hasRetentionTableName()
-						&& tblName.equalsIgnoreCase(getRetentionTableName()))
-					foundRetain = true;
-				else if (hasDataTableName()
-						&& tblName.equalsIgnoreCase(getDataTableName()))
-					foundData = true;
-				else if (hasJarDataTableName()
-						&& tblName.equalsIgnoreCase(getJarDataTableName()))
-					foundJarData = true;
-				else if (hasQueueTableName()
-						&& tblName.equalsIgnoreCase(getQueueTableName()))
-					foundQueue = true;
-				else if (hasTransactionTableName()
-						&& tblName.equalsIgnoreCase(getTransactionTableName()))
-					foundTrans = true;
-				else if (hasObjectIdTableName()
-						&& tblName.equalsIgnoreCase(getObjectIdTableName()))
-					foundObjId = true;
-				else if (hasSymLinksTableName()
-						&& tblName.equalsIgnoreCase(getSymLinksTableName()))
-					foundSymLink = true;
-				else if(tblName.equalsIgnoreCase("jweb_commonfilerevision_value"))
-					foundCommonRevisionValue = true;*/
-				
-				if (tblName.equalsIgnoreCase(StreamsTable_MYFILE))
-					foundStream_myfile = true;
-				else if (tblName.equalsIgnoreCase(StreamsTable_COMMFILE))
-					foundStream_commfile = true;
-				else if (tblName.equalsIgnoreCase(StreamsTable_SHAREFILE))
-					foundStream_sharefile = true;
-				
-//				else if (tblName.equalsIgnoreCase(RetentionTable_MYFILE))
-//					foundRetain_myfile = true;				
-				else if (tblName.equalsIgnoreCase(RetentionTable_COMMFILE))
-					foundRetain_commfile = true;
-//				else if (tblName.equalsIgnoreCase(RetentionTable_SHAREFILE))
-//					foundRetain_sharefile = true;
-				
-//				else if (tblName.equalsIgnoreCase(QueueTable_MYFILE))
-//					foundQueue_myfile = true;				
-				else if (tblName.equalsIgnoreCase(QueueTable_COMMFILE))
-					foundQueue_commfile = true;
-//				else if (tblName.equalsIgnoreCase(QueueTable_SHAREFILE))
-//					foundQueue_sharefile = true;
-				
-//				else if (tblName.equalsIgnoreCase(TransactQueueTable_MYFILE))
-//					foundTrans_myfile = true;				
-				else if (tblName.equalsIgnoreCase(TransactQueueTable_COMMFILE))
-					foundTrans_commfile = true;
-//				else if (tblName.equalsIgnoreCase(TransactQueueTable_SHAREFILE))
-//					foundTrans_sharefile = true;
-				
-//				else if (tblName.equalsIgnoreCase(DataTable_MYFILE))
-//					foundData_myfile = true;				
-				else if (tblName.equalsIgnoreCase(DataTable_COMMFILE))
-					foundData_commfile = true;
-//				else if (tblName.equalsIgnoreCase(DataTable_SHAREFILE))
-//					foundData_sharefile = true;
-				//others
-				else if (tblName.equalsIgnoreCase(JarDataTable))
-					foundJarData = true;				
-				else if (tblName.equalsIgnoreCase(ObjectIdTable))
-					foundObjId = true;
-				else if (tblName.equalsIgnoreCase(SymLinkTable))
-					foundSymLink = true;
-				
-				else if(tblName.equalsIgnoreCase("jweb_commonfilerevision_value"))
-					foundCommonRevisionValue = true;
-			}
+				boolean foundStream_sharefile = false;
+				boolean foundRetain_sharefile = false;
+				boolean foundQueue_sharefile = false;
+				boolean foundTrans_sharefile = false;
+				boolean foundData_sharefile = false;
 
-			// Check if the file system structure table should be created
+				while (rs.next()) {
 
-			/*if (foundStruct == false) {
+					// Get the table name
 
-				// Create the file system structure table
+					String tblName = rs.getString("TABLE_NAME");
 
-				Statement stmt = conn.createStatement();
+					// Check if we found the filesystem structure or streams
+					// table
+					/*
+					 * if (tblName.equalsIgnoreCase(getFileSysTableName()))
+					 * foundStruct = true; else if (hasStreamsTableName() &&
+					 * tblName.equalsIgnoreCase(getStreamsTableName()))
+					 * foundStream = true; else if (hasRetentionTableName() &&
+					 * tblName.equalsIgnoreCase(getRetentionTableName()))
+					 * foundRetain = true; else if (hasDataTableName() &&
+					 * tblName.equalsIgnoreCase(getDataTableName())) foundData =
+					 * true; else if (hasJarDataTableName() &&
+					 * tblName.equalsIgnoreCase(getJarDataTableName()))
+					 * foundJarData = true; else if (hasQueueTableName() &&
+					 * tblName.equalsIgnoreCase(getQueueTableName())) foundQueue
+					 * = true; else if (hasTransactionTableName() &&
+					 * tblName.equalsIgnoreCase(getTransactionTableName()))
+					 * foundTrans = true; else if (hasObjectIdTableName() &&
+					 * tblName.equalsIgnoreCase(getObjectIdTableName()))
+					 * foundObjId = true; else if (hasSymLinksTableName() &&
+					 * tblName.equalsIgnoreCase(getSymLinksTableName()))
+					 * foundSymLink = true; else
+					 * if(tblName.equalsIgnoreCase("jweb_commonfilerevision_value"
+					 * )) foundCommonRevisionValue = true;
+					 */
 
-				stmt
-						.execute("CREATE TABLE "
-								+ getFileSysTableName()
-								+ " (FileId INTEGER AUTO_INCREMENT, DirId INTEGER, FileName VARCHAR(255) BINARY NOT NULL, FileSize BIGINT,"
-								+ "CreateDate BIGINT, ModifyDate BIGINT, AccessDate BIGINT, ChangeDate BIGINT, ReadOnly BIT, Archived BIT, Directory BIT,"
-								+ "SystemFile BIT, Hidden BIT, IsSymLink BIT, Uid INTEGER, Gid INTEGER, Mode INTEGER, Deleted BIT NOT NULL DEFAULT 0, "
-								+ "PRIMARY KEY (FileId));");
+					if (tblName.equalsIgnoreCase(StreamsTable_MYFILE))
+						foundStream_myfile = true;
+					else if (tblName.equalsIgnoreCase(StreamsTable_COMMFILE))
+						foundStream_commfile = true;
+					else if (tblName.equalsIgnoreCase(StreamsTable_SHAREFILE))
+						foundStream_sharefile = true;
 
-				// Create various indexes
+					// else if (tblName.equalsIgnoreCase(RetentionTable_MYFILE))
+					// foundRetain_myfile = true;
+					else if (tblName.equalsIgnoreCase(RetentionTable_COMMFILE))
+						foundRetain_commfile = true;
+					// else if
+					// (tblName.equalsIgnoreCase(RetentionTable_SHAREFILE))
+					// foundRetain_sharefile = true;
 
-				stmt.execute("ALTER TABLE " + getFileSysTableName()
-						+ " ADD UNIQUE INDEX IFileDirId (FileName,DirId);");
-				stmt.execute("ALTER TABLE " + getFileSysTableName()
-						+ " ADD INDEX IDirId (DirId);");
-				stmt.execute("ALTER TABLE " + getFileSysTableName()
-						+ " ADD INDEX IDir (DirId,Directory);");
-				stmt
-						.execute("ALTER TABLE "
-								+ getFileSysTableName()
-								+ " ADD UNIQUE INDEX IFileDirIdDir (FileName,DirId,Directory);");
+					// else if (tblName.equalsIgnoreCase(QueueTable_MYFILE))
+					// foundQueue_myfile = true;
+					else if (tblName.equalsIgnoreCase(QueueTable_COMMFILE))
+						foundQueue_commfile = true;
+					// else if (tblName.equalsIgnoreCase(QueueTable_SHAREFILE))
+					// foundQueue_sharefile = true;
 
-				stmt.close();
+					// else if
+					// (tblName.equalsIgnoreCase(TransactQueueTable_MYFILE))
+					// foundTrans_myfile = true;
+					else if (tblName
+							.equalsIgnoreCase(TransactQueueTable_COMMFILE))
+						foundTrans_commfile = true;
+					// else if
+					// (tblName.equalsIgnoreCase(TransactQueueTable_SHAREFILE))
+					// foundTrans_sharefile = true;
 
-				// DEBUG
-				log4j.info("[mySQL] Created table " + getFileSysTableName());
-			}*/
+					// else if (tblName.equalsIgnoreCase(DataTable_MYFILE))
+					// foundData_myfile = true;
+					else if (tblName.equalsIgnoreCase(DataTable_COMMFILE))
+						foundData_commfile = true;
+					// else if (tblName.equalsIgnoreCase(DataTable_SHAREFILE))
+					// foundData_sharefile = true;
+					// others
+					else if (tblName.equalsIgnoreCase(JarDataTable))
+						foundJarData = true;
+					else if (tblName.equalsIgnoreCase(ObjectIdTable))
+						foundObjId = true;
+					else if (tblName.equalsIgnoreCase(SymLinkTable))
+						foundSymLink = true;
 
-			// Check if the file streams table should be created
-			
-			
-			/*if (isNTFSEnabled() && foundStream == false
-					&& getStreamsTableName() != null) {
+					else if (tblName
+							.equalsIgnoreCase("jweb_commonfilerevision_value"))
+						foundCommonRevisionValue = true;
+				}
 
-				// Create the file streams table
+				// Check if the file system structure table should be created
 
-				Statement stmt = conn.createStatement();
+				/*
+				 * if (foundStruct == false) {
+				 * 
+				 * // Create the file system structure table
+				 * 
+				 * Statement stmt = conn.createStatement();
+				 * 
+				 * stmt .execute("CREATE TABLE " + getFileSysTableName() +
+				 * " (FileId INTEGER AUTO_INCREMENT, DirId INTEGER, FileName VARCHAR(255) BINARY NOT NULL, FileSize BIGINT,"
+				 * +
+				 * "CreateDate BIGINT, ModifyDate BIGINT, AccessDate BIGINT, ChangeDate BIGINT, ReadOnly BIT, Archived BIT, Directory BIT,"
+				 * +
+				 * "SystemFile BIT, Hidden BIT, IsSymLink BIT, Uid INTEGER, Gid INTEGER, Mode INTEGER, Deleted BIT NOT NULL DEFAULT 0, "
+				 * + "PRIMARY KEY (FileId));");
+				 * 
+				 * // Create various indexes
+				 * 
+				 * stmt.execute("ALTER TABLE " + getFileSysTableName() +
+				 * " ADD UNIQUE INDEX IFileDirId (FileName,DirId);");
+				 * stmt.execute("ALTER TABLE " + getFileSysTableName() +
+				 * " ADD INDEX IDirId (DirId);"); stmt.execute("ALTER TABLE " +
+				 * getFileSysTableName() +
+				 * " ADD INDEX IDir (DirId,Directory);"); stmt
+				 * .execute("ALTER TABLE " + getFileSysTableName() +
+				 * " ADD UNIQUE INDEX IFileDirIdDir (FileName,DirId,Directory);"
+				 * );
+				 * 
+				 * stmt.close();
+				 * 
+				 * // DEBUG log4j.info("[mySQL] Created table " +
+				 * getFileSysTableName()); }
+				 */
 
-				stmt
-						.execute("CREATE TABLE "
-								+ getStreamsTableName()
+				// Check if the file streams table should be created
+
+				/*
+				 * if (isNTFSEnabled() && foundStream == false &&
+				 * getStreamsTableName() != null) {
+				 * 
+				 * // Create the file streams table
+				 * 
+				 * Statement stmt = conn.createStatement();
+				 * 
+				 * stmt .execute("CREATE TABLE " + getStreamsTableName() +
+				 * " (StreamId INTEGER AUTO_INCREMENT, FileId INTEGER NOT NULL, StreamName VARCHAR(255) BINARY NOT NULL, StreamSize BIGINT,"
+				 * +
+				 * "CreateDate BIGINT, ModifyDate BIGINT, AccessDate BIGINT, PRIMARY KEY (StreamId));"
+				 * );
+				 * 
+				 * // Create various indexes
+				 * 
+				 * stmt.execute("ALTER TABLE " + getStreamsTableName() +
+				 * " ADD INDEX IFileId (FileId);");
+				 * 
+				 * stmt.close();
+				 * 
+				 * // DEBUG log4j.info("[mySQL] Created table " +
+				 * getStreamsTableName()); }
+				 */
+
+//				if (isNTFSEnabled()) {
+				if ( 1==1 ) {
+
+					if (foundStream_myfile == false) {
+						// Create the file streams table
+
+						Statement stmt = conn.createStatement();
+
+						stmt.execute("CREATE TABLE "
+								+ StreamsTable_MYFILE
 								+ " (StreamId INTEGER AUTO_INCREMENT, FileId INTEGER NOT NULL, StreamName VARCHAR(255) BINARY NOT NULL, StreamSize BIGINT,"
 								+ "CreateDate BIGINT, ModifyDate BIGINT, AccessDate BIGINT, PRIMARY KEY (StreamId));");
 
-				// Create various indexes
+						// Create various indexes
 
-				stmt.execute("ALTER TABLE " + getStreamsTableName()
-						+ " ADD INDEX IFileId (FileId);");
+						stmt.execute("ALTER TABLE " + StreamsTable_MYFILE
+								+ " ADD INDEX IFileId (FileId);");
 
-				stmt.close();
+						stmt.close();
 
-				// DEBUG
-				log4j.info("[mySQL] Created table " + getStreamsTableName());
-			}*/
-			
-			if (isNTFSEnabled() ){
-				
-				if(foundStream_myfile==false)
-				{
-					// Create the file streams table
+						// DEBUG
+						log4j.info("[mySQL] Created table "
+								+ StreamsTable_MYFILE);
+					}
+					if (foundStream_commfile == false) {
+						// Create the file streams table
 
-					Statement stmt = conn.createStatement();
+						Statement stmt = conn.createStatement();
 
-					stmt
-							.execute("CREATE TABLE "
-									+ StreamsTable_MYFILE
-									+ " (StreamId INTEGER AUTO_INCREMENT, FileId INTEGER NOT NULL, StreamName VARCHAR(255) BINARY NOT NULL, StreamSize BIGINT,"
-									+ "CreateDate BIGINT, ModifyDate BIGINT, AccessDate BIGINT, PRIMARY KEY (StreamId));");
+						stmt.execute("CREATE TABLE "
+								+ StreamsTable_COMMFILE
+								+ " (StreamId INTEGER AUTO_INCREMENT, FileId INTEGER NOT NULL, StreamName VARCHAR(255) BINARY NOT NULL, StreamSize BIGINT,"
+								+ "CreateDate BIGINT, ModifyDate BIGINT, AccessDate BIGINT, PRIMARY KEY (StreamId));");
 
-					// Create various indexes
+						// Create various indexes
 
-					stmt.execute("ALTER TABLE " + StreamsTable_MYFILE
-							+ " ADD INDEX IFileId (FileId);");
+						stmt.execute("ALTER TABLE " + StreamsTable_COMMFILE
+								+ " ADD INDEX IFileId (FileId);");
 
-					stmt.close();
+						stmt.close();
 
-					// DEBUG
-					log4j.info("[mySQL] Created table " + StreamsTable_MYFILE);
+						// DEBUG
+						log4j.info("[mySQL] Created table "
+								+ StreamsTable_MYFILE);
+					}
+					if (foundStream_sharefile == false) {
+						// Create the file streams table
+
+						Statement stmt = conn.createStatement();
+
+						stmt.execute("CREATE TABLE "
+								+ StreamsTable_SHAREFILE
+								+ " (StreamId INTEGER AUTO_INCREMENT, FileId INTEGER NOT NULL, StreamName VARCHAR(255) BINARY NOT NULL, StreamSize BIGINT,"
+								+ "CreateDate BIGINT, ModifyDate BIGINT, AccessDate BIGINT, PRIMARY KEY (StreamId));");
+
+						// Create various indexes
+
+						stmt.execute("ALTER TABLE " + StreamsTable_SHAREFILE
+								+ " ADD INDEX IFileId (FileId);");
+
+						stmt.close();
+
+						// DEBUG
+						log4j.info("[mySQL] Created table "
+								+ StreamsTable_MYFILE);
+					}
+
 				}
-				if(foundStream_commfile==false)
-				{
-					// Create the file streams table
 
-					Statement stmt = conn.createStatement();
+				// Check if the retention table should be created
 
-					stmt
-							.execute("CREATE TABLE "
-									+ StreamsTable_COMMFILE
-									+ " (StreamId INTEGER AUTO_INCREMENT, FileId INTEGER NOT NULL, StreamName VARCHAR(255) BINARY NOT NULL, StreamSize BIGINT,"
-									+ "CreateDate BIGINT, ModifyDate BIGINT, AccessDate BIGINT, PRIMARY KEY (StreamId));");
+				/*
+				 * if (isRetentionEnabled() && foundRetain == false &&
+				 * getRetentionTableName() != null) {
+				 * 
+				 * // Create the retention period data table
+				 * 
+				 * Statement stmt = conn.createStatement();
+				 * 
+				 * stmt .execute("CREATE TABLE " + getRetentionTableName() +
+				 * " (FileId INTEGER NOT NULL, StartDate TIMESTAMP, EndDate TIMESTAMP,"
+				 * + "PurgeFlag TINYINT(1), PRIMARY KEY (FileId));");
+				 * stmt.close();
+				 * 
+				 * // DEBUG
+				 * 
+				 * log4j.info("[mySQL] Created table " +
+				 * getRetentionTableName()); }
+				 */
+				if (isRetentionEnabled()) {
 
-					// Create various indexes
+					// if(foundRetain_myfile==false)
+					// {
+					// // Create the retention period data table
+					//
+					// Statement stmt = conn.createStatement();
+					//
+					// stmt
+					// .execute("CREATE TABLE "
+					// + RetentionTable_MYFILE
+					// +
+					// " (FileId INTEGER NOT NULL, StartDate TIMESTAMP, EndDate TIMESTAMP,"
+					// + "PurgeFlag TINYINT(1), PRIMARY KEY (FileId));");
+					// stmt.close();
+					//
+					// // DEBUG
+					//
+					// log4j.info("[mySQL] Created table " +
+					// RetentionTable_MYFILE);
+					// }
+					if (foundRetain_commfile == false) {
+						// Create the retention period data table
 
-					stmt.execute("ALTER TABLE " + StreamsTable_COMMFILE
-							+ " ADD INDEX IFileId (FileId);");
+						Statement stmt = conn.createStatement();
 
-					stmt.close();
-
-					// DEBUG
-					log4j.info("[mySQL] Created table " + StreamsTable_MYFILE);
-				}
-				if(foundStream_sharefile==false)
-				{
-					// Create the file streams table
-
-					Statement stmt = conn.createStatement();
-
-					stmt
-							.execute("CREATE TABLE "
-									+ StreamsTable_SHAREFILE
-									+ " (StreamId INTEGER AUTO_INCREMENT, FileId INTEGER NOT NULL, StreamName VARCHAR(255) BINARY NOT NULL, StreamSize BIGINT,"
-									+ "CreateDate BIGINT, ModifyDate BIGINT, AccessDate BIGINT, PRIMARY KEY (StreamId));");
-
-					// Create various indexes
-
-					stmt.execute("ALTER TABLE " + StreamsTable_SHAREFILE
-							+ " ADD INDEX IFileId (FileId);");
-
-					stmt.close();
-
-					// DEBUG
-					log4j.info("[mySQL] Created table " + StreamsTable_MYFILE);
-				}
-				
-			}
-
-			// Check if the retention table should be created
-
-			/*if (isRetentionEnabled() && foundRetain == false
-					&& getRetentionTableName() != null) {
-
-				// Create the retention period data table
-
-				Statement stmt = conn.createStatement();
-
-				stmt
-						.execute("CREATE TABLE "
-								+ getRetentionTableName()
+						stmt.execute("CREATE TABLE "
+								+ RetentionTable_COMMFILE
 								+ " (FileId INTEGER NOT NULL, StartDate TIMESTAMP, EndDate TIMESTAMP,"
 								+ "PurgeFlag TINYINT(1), PRIMARY KEY (FileId));");
-				stmt.close();
+						stmt.close();
 
-				// DEBUG
+						// DEBUG
 
-				log4j.info("[mySQL] Created table " + getRetentionTableName());
-			}*/
-			if (isRetentionEnabled()) {
+						log4j.info("[mySQL] Created table "
+								+ RetentionTable_COMMFILE);
+					}
+					// if(foundRetain_sharefile==false)
+					// {
+					// // Create the retention period data table
+					//
+					// Statement stmt = conn.createStatement();
+					//
+					// stmt
+					// .execute("CREATE TABLE "
+					// + RetentionTable_SHAREFILE
+					// +
+					// " (FileId INTEGER NOT NULL, StartDate TIMESTAMP, EndDate TIMESTAMP,"
+					// + "PurgeFlag TINYINT(1), PRIMARY KEY (FileId));");
+					// stmt.close();
+					//
+					// // DEBUG
+					//
+					// log4j.info("[mySQL] Created table " +
+					// RetentionTable_SHAREFILE);
+					// }
+				}
 
-//				if(foundRetain_myfile==false)
-//				{
-//					// Create the retention period data table
-//
-//					Statement stmt = conn.createStatement();
-//
-//					stmt
-//							.execute("CREATE TABLE "
-//									+ RetentionTable_MYFILE
-//									+ " (FileId INTEGER NOT NULL, StartDate TIMESTAMP, EndDate TIMESTAMP,"
-//									+ "PurgeFlag TINYINT(1), PRIMARY KEY (FileId));");
-//					stmt.close();
-//
-//					// DEBUG
-//
-//					log4j.info("[mySQL] Created table " + RetentionTable_MYFILE);
-//				}
-				if(foundRetain_commfile==false)
-				{
-					// Create the retention period data table
+				// Check if the file loader queue table should be created
+
+				if (isQueueEnabled()) {
+
+					// if(foundQueue_myfile==false)
+					// {
+					// // Create the request queue data table
+					//
+					// Statement stmt = conn.createStatement();
+					//
+					// stmt
+					// .execute("CREATE TABLE "
+					// + QueueTable_MYFILE
+					// +
+					// " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, ReqType SMALLINT,"
+					// +
+					// "SeqNo INTEGER AUTO_INCREMENT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP, Attribs VARCHAR(512), PRIMARY KEY (SeqNo));");
+					// stmt.execute("ALTER TABLE " +QueueTable_MYFILE
+					// + " ADD INDEX IFileId (FileId);");
+					// stmt.execute("ALTER TABLE " +QueueTable_MYFILE
+					// + " ADD INDEX IFileIdType (FileId, ReqType);");
+					//
+					// stmt.close();
+					//
+					// // DEBUG
+					// log4j.info("[mySQL] Created table " + QueueTable_MYFILE);
+					// }
+
+					if (foundQueue_commfile == false) {
+						// Create the request queue data table
+
+						Statement stmt = conn.createStatement();
+
+						stmt.execute("CREATE TABLE "
+								+ QueueTable_COMMFILE
+								+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, ReqType SMALLINT,"
+								+ "SeqNo INTEGER AUTO_INCREMENT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP, Attribs VARCHAR(512), PRIMARY KEY (SeqNo));");
+						stmt.execute("ALTER TABLE " + QueueTable_COMMFILE
+								+ " ADD INDEX IFileId (FileId);");
+						stmt.execute("ALTER TABLE " + QueueTable_COMMFILE
+								+ " ADD INDEX IFileIdType (FileId, ReqType);");
+
+						stmt.close();
+
+						// DEBUG
+						log4j.info("[mySQL] Created table "
+								+ QueueTable_COMMFILE);
+					}
+
+					/*
+					 * if(foundQueue_sharefile==false) { // Create the request
+					 * queue data table
+					 * 
+					 * Statement stmt = conn.createStatement();
+					 * 
+					 * stmt .execute("CREATE TABLE " + QueueTable_SHAREFILE +
+					 * " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, ReqType SMALLINT,"
+					 * +
+					 * "SeqNo INTEGER AUTO_INCREMENT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP, Attribs VARCHAR(512), PRIMARY KEY (SeqNo));"
+					 * ); stmt.execute("ALTER TABLE " +QueueTable_SHAREFILE +
+					 * " ADD INDEX IFileId (FileId);");
+					 * stmt.execute("ALTER TABLE " +QueueTable_SHAREFILE +
+					 * " ADD INDEX IFileIdType (FileId, ReqType);");
+					 * 
+					 * stmt.close();
+					 * 
+					 * // DEBUG log4j.info("[mySQL] Created table " +
+					 * QueueTable_MYFILE); }
+					 */
+				}
+
+				// Check if the file loader transaction queue table should be
+				// created
+
+				if (isQueueEnabled()) {
+
+					/*
+					 * if(foundTrans_myfile==false) { // Create the transaction
+					 * request queue data table
+					 * 
+					 * Statement stmt = conn.createStatement();
+					 * 
+					 * stmt .execute("CREATE TABLE " + TransactQueueTable_MYFILE
+					 * + " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL,"
+					 * +
+					 * "TranId INTEGER NOT NULL, ReqType SMALLINT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP,"
+					 * +
+					 * "Attribs VARCHAR(512), PRIMARY KEY (FileId,StreamId,TranId));"
+					 * );
+					 * 
+					 * stmt.close();
+					 * 
+					 * // DEBUG log4j .info("[mySQL] Created table " +
+					 * TransactQueueTable_MYFILE); }
+					 */
+					if (foundTrans_commfile == false) {
+						// Create the transaction request queue data table
+
+						Statement stmt = conn.createStatement();
+
+						stmt.execute("CREATE TABLE "
+								+ TransactQueueTable_COMMFILE
+								+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL,"
+								+ "TranId INTEGER NOT NULL, ReqType SMALLINT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP,"
+								+ "Attribs VARCHAR(512), PRIMARY KEY (FileId,StreamId,TranId));");
+
+						stmt.close();
+
+						// DEBUG
+						log4j.info("[mySQL] Created table "
+								+ TransactQueueTable_COMMFILE);
+					}
+					/*
+					 * if(foundTrans_sharefile==false) { // Create the
+					 * transaction request queue data table
+					 * 
+					 * Statement stmt = conn.createStatement();
+					 * 
+					 * stmt .execute("CREATE TABLE " +
+					 * TransactQueueTable_SHAREFILE +
+					 * " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL," +
+					 * "TranId INTEGER NOT NULL, ReqType SMALLINT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP,"
+					 * +
+					 * "Attribs VARCHAR(512), PRIMARY KEY (FileId,StreamId,TranId));"
+					 * );
+					 * 
+					 * stmt.close();
+					 * 
+					 * // DEBUG log4j .info("[mySQL] Created table " +
+					 * TransactQueueTable_SHAREFILE); }
+					 */
+
+				}
+
+				// Check if the file data table should be created
+
+				if (isDataEnabled()) {
+
+					// if(foundData_myfile==false)
+					// {
+					// // Create the file data table
+					//
+					// Statement stmt = conn.createStatement();
+					//
+					// stmt
+					// .execute("CREATE TABLE "
+					// + DataTable_MYFILE
+					// +
+					// " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, FragNo INTEGER, FragLen INTEGER, Data LONGBLOB, JarFile BIT, JarId INTEGER);");
+					//
+					// stmt.execute("ALTER TABLE " + DataTable_MYFILE
+					// + " ADD INDEX IFileStreamId (FileId,StreamId);");
+					// stmt.execute("ALTER TABLE " + DataTable_MYFILE
+					// + " ADD INDEX IFileId (FileId);");
+					// stmt.execute("ALTER TABLE " + DataTable_MYFILE
+					// + " ADD INDEX IFileIdFrag (FileId,FragNo);");
+					//
+					// stmt.close();
+					//
+					// // DEBUG
+					// log4j.info("[mySQL] Created table " + DataTable_MYFILE);
+					// }
+					if (foundData_commfile == false) {
+						// Create the file data table
+
+						Statement stmt = conn.createStatement();
+
+						stmt.execute("CREATE TABLE "
+								+ DataTable_COMMFILE
+								+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, FragNo INTEGER, FragLen INTEGER, Data LONGBLOB, JarFile BIT, JarId INTEGER);");
+
+						stmt.execute("ALTER TABLE " + DataTable_COMMFILE
+								+ " ADD INDEX IFileStreamId (FileId,StreamId);");
+						stmt.execute("ALTER TABLE " + DataTable_COMMFILE
+								+ " ADD INDEX IFileId (FileId);");
+						stmt.execute("ALTER TABLE " + DataTable_COMMFILE
+								+ " ADD INDEX IFileIdFrag (FileId,FragNo);");
+
+						stmt.close();
+
+						// DEBUG
+						log4j.info("[mySQL] Created table "
+								+ DataTable_COMMFILE);
+					}
+					// if(foundData_sharefile==false)
+					// {
+					// // Create the file data table
+					//
+					// Statement stmt = conn.createStatement();
+					//
+					// stmt
+					// .execute("CREATE TABLE "
+					// + DataTable_SHAREFILE
+					// +
+					// " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, FragNo INTEGER, FragLen INTEGER, Data LONGBLOB, JarFile BIT, JarId INTEGER);");
+					//
+					// stmt.execute("ALTER TABLE " + DataTable_SHAREFILE
+					// + " ADD INDEX IFileStreamId (FileId,StreamId);");
+					// stmt.execute("ALTER TABLE " + DataTable_SHAREFILE
+					// + " ADD INDEX IFileId (FileId);");
+					// stmt.execute("ALTER TABLE " + DataTable_SHAREFILE
+					// + " ADD INDEX IFileIdFrag (FileId,FragNo);");
+					//
+					// stmt.close();
+					//
+					// // DEBUG
+					// log4j.info("[mySQL] Created table " +
+					// DataTable_SHAREFILE);
+					// }
+
+				}
+
+				// Check if the Jar file data table should be created
+
+				if (isJarDataEnabled() && foundJarData == false) {
+
+					// Create the Jar file data table
 
 					Statement stmt = conn.createStatement();
 
-					stmt
-							.execute("CREATE TABLE "
-									+ RetentionTable_COMMFILE
-									+ " (FileId INTEGER NOT NULL, StartDate TIMESTAMP, EndDate TIMESTAMP,"
-									+ "PurgeFlag TINYINT(1), PRIMARY KEY (FileId));");
+					stmt.execute("CREATE TABLE "
+							+ JarDataTable
+							+ " (JarId INTEGER AUTO_INCREMENT, Data LONGBLOB, PRIMARY KEY (JarId));");
+
+					stmt.close();
+
+					// DEBUG
+					log4j.info("[mySQL] Created table " + JarDataTable);
+				}
+
+				// Check if the file id/object id mapping table should be
+				// created
+
+				if (isObjectIdEnabled() && foundObjId == false) {
+
+					// Create the file id/object id mapping table
+
+					Statement stmt = conn.createStatement();
+
+					stmt.execute("CREATE TABLE "
+							+ ObjectIdTable
+							+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, ObjectId VARCHAR(128), PRIMARY KEY (FileId,StreamId))");
+
 					stmt.close();
 
 					// DEBUG
 
-					log4j.info("[mySQL] Created table " + RetentionTable_COMMFILE);
+					log4j.info("[mySQL] Created table " + ObjectIdTable);
 				}
-//				if(foundRetain_sharefile==false)
-//				{
-//					// Create the retention period data table
-//
-//					Statement stmt = conn.createStatement();
-//
-//					stmt
-//							.execute("CREATE TABLE "
-//									+ RetentionTable_SHAREFILE
-//									+ " (FileId INTEGER NOT NULL, StartDate TIMESTAMP, EndDate TIMESTAMP,"
-//									+ "PurgeFlag TINYINT(1), PRIMARY KEY (FileId));");
-//					stmt.close();
-//
-//					// DEBUG
-//
-//					log4j.info("[mySQL] Created table " + RetentionTable_SHAREFILE);
-//				}
-			}
 
-			// Check if the file loader queue table should be created
+				// Check if the symbolic links table should be created
 
-			if (isQueueEnabled()) {
+				if (isSymbolicLinksEnabled() && foundSymLink == false) {
 
-//				if(foundQueue_myfile==false)
-//				{
-//					// Create the request queue data table
-//
-//					Statement stmt = conn.createStatement();
-//
-//					stmt
-//							.execute("CREATE TABLE "
-//									+ QueueTable_MYFILE
-//									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, ReqType SMALLINT,"
-//									+ "SeqNo INTEGER AUTO_INCREMENT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP, Attribs VARCHAR(512), PRIMARY KEY (SeqNo));");
-//					stmt.execute("ALTER TABLE " +QueueTable_MYFILE
-//							+ " ADD INDEX IFileId (FileId);");
-//					stmt.execute("ALTER TABLE " +QueueTable_MYFILE
-//							+ " ADD INDEX IFileIdType (FileId, ReqType);");
-//
-//					stmt.close();
-//
-//					// DEBUG
-//					log4j.info("[mySQL] Created table " + QueueTable_MYFILE);
-//				}
+					// Create the symbolic links table
+
+					Statement stmt = conn.createStatement();
+
+					stmt.execute("CREATE TABLE "
+							+ SymLinkTable
+							+ " (FileId INTEGER NOT NULL PRIMARY KEY, SymLink VARCHAR(8192))");
+
+					stmt.close();
+
+					// DEBUG
+					log4j.info("[mySQL] Created table " + SymLinkTable);
+				}
+
+				if (foundCommonRevisionValue == false) {
+					// Create the CommonFile Revision Value mapping table
+
+					Statement stmt = conn.createStatement();
+
+					stmt.execute("CREATE TABLE `jweb_commonfilerevision_value` "
+							+ "(max_value bigint(20) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;");
+					stmt.execute("REPLACE INTO `jweb_commonfilerevision_value` select max(revision) from jweb_commonfilecache;");
+					stmt.close();
+					// DEBUG
+
+					log4j.info("[mySQL] Created table  `jweb_commonfilerevision_value`");
+				}
 				
-				if(foundQueue_commfile==false)
-				{
-					// Create the request queue data table
-
-					Statement stmt = conn.createStatement();
-
-					stmt
-							.execute("CREATE TABLE "
-									+ QueueTable_COMMFILE
-									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, ReqType SMALLINT,"
-									+ "SeqNo INTEGER AUTO_INCREMENT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP, Attribs VARCHAR(512), PRIMARY KEY (SeqNo));");
-					stmt.execute("ALTER TABLE " +QueueTable_COMMFILE
-							+ " ADD INDEX IFileId (FileId);");
-					stmt.execute("ALTER TABLE " +QueueTable_COMMFILE
-							+ " ADD INDEX IFileIdType (FileId, ReqType);");
-
-					stmt.close();
-
-					// DEBUG
-					log4j.info("[mySQL] Created table " + QueueTable_COMMFILE);
-				}
 				
-				/*if(foundQueue_sharefile==false)
-				{
-					// Create the request queue data table
-
+				if (cleanTempFileOnStart) {
+					
+					log4j.info("MySQLDBLInterface.initializeDatabase() xxxxxxxx ");
+					
+					
 					Statement stmt = conn.createStatement();
-
-					stmt
-							.execute("CREATE TABLE "
-									+ QueueTable_SHAREFILE
-									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, ReqType SMALLINT,"
-									+ "SeqNo INTEGER AUTO_INCREMENT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP, Attribs VARCHAR(512), PRIMARY KEY (SeqNo));");
-					stmt.execute("ALTER TABLE " +QueueTable_SHAREFILE
-							+ " ADD INDEX IFileId (FileId);");
-					stmt.execute("ALTER TABLE " +QueueTable_SHAREFILE
-							+ " ADD INDEX IFileIdType (FileId, ReqType);");
-
-					stmt.close();
-
-					// DEBUG
-					log4j.info("[mySQL] Created table " + QueueTable_MYFILE);
+					
+					/**
+					 * 
+					 * 删除资料库 临时文件
+					 */
+					String upSql = "DELETE FROM jweb_commonfilerevision WHERE fileId IN \n" +
+							"( SELECT * FROM \n" +
+							"(\n" +
+							"	SELECT id FROM jweb_commonfilecache WHERE (NAME LIKE '~$%' OR (NAME LIKE '%.tmp' AND status <0) ) AND isfile = 1\n" +
+							") v );"
+							;
+					log4j.debug("[mySQL] upSql SQL:" + upSql);
+					stmt.executeUpdate(upSql);
+					upSql = "DELETE FROM jweb_commonfilecache WHERE (NAME LIKE '~$%' OR (NAME LIKE '%.tmp' AND status <0) ) AND isfile = 1;";
+					log4j.debug("[mySQL] upSql SQL:" + upSql);
+					stmt.executeUpdate(upSql);
+					
+					/**
+					 * 
+					 * 
+					 * 删除个人文件 临时文件
+					 */
+					upSql = "DELETE FROM jweb_filerevision WHERE fileId IN \n" +
+							"( SELECT * FROM \n" +
+							"(\n" +
+							"	SELECT id FROM jweb_filecache WHERE (NAME LIKE '~$%' OR (NAME LIKE '%.tmp' AND status <0) ) AND isfile = 1\n" +
+							") v );"
+							;
+					log4j.debug("[mySQL] upSql SQL:" + upSql);
+					stmt.executeUpdate(upSql);
+					upSql = "DELETE FROM jweb_filecache WHERE (NAME LIKE '~$%' OR (NAME LIKE '%.tmp' AND status <0) ) AND isfile = 1;";
+					log4j.debug("[mySQL] upSql SQL:" + upSql);
+					stmt.executeUpdate(upSql);
+					
+					/**
+					 * 
+					 * 
+					 * 删除共享文件 临时文件
+					 */
+					upSql = "DELETE FROM jweb_sharefilerevision WHERE fileId IN \n" +
+							"( SELECT * FROM \n" +
+							"(\n" +
+							"	SELECT id FROM jweb_sharefilecache WHERE (NAME LIKE '~$%' OR (NAME LIKE '%.tmp' AND status <0) ) AND isfile = 1\n" +
+							") v );"
+							;
+					log4j.debug("[mySQL] upSql SQL:" + upSql);
+					stmt.executeUpdate(upSql);
+					upSql = "DELETE FROM jweb_sharefilecache WHERE (NAME LIKE '~$%' OR (NAME LIKE '%.tmp' AND status <0) ) AND isfile = 1;";
+					log4j.debug("[mySQL] upSql SQL:" + upSql);
+					stmt.executeUpdate(upSql);
+					
+					
+					/**
+					 * 
+					 * 
+					 * 删除云编辑 临时文件
+					 */
+					
 				}
-				*/
+			} catch (Exception ex) {
+				log4j.error("Error: " + ex.toString());
+			} finally {
+
+				// Release the database connection
+
+				if (conn != null)
+					releaseConnection(conn);
 			}
 
-			// Check if the file loader transaction queue table should be
-			// created
-
-			if (isQueueEnabled()) {
-
-				/*if(foundTrans_myfile==false)
-				{
-					// Create the transaction request queue data table
-
-					Statement stmt = conn.createStatement();
-
-					stmt
-							.execute("CREATE TABLE "
-									+ TransactQueueTable_MYFILE
-									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL,"
-									+ "TranId INTEGER NOT NULL, ReqType SMALLINT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP,"
-									+ "Attribs VARCHAR(512), PRIMARY KEY (FileId,StreamId,TranId));");
-
-					stmt.close();
-
-					// DEBUG
-					log4j
-							.info("[mySQL] Created table "
-									+ TransactQueueTable_MYFILE);
-				}*/
-				if(foundTrans_commfile==false)
-				{
-					// Create the transaction request queue data table
-
-					Statement stmt = conn.createStatement();
-
-					stmt
-							.execute("CREATE TABLE "
-									+ TransactQueueTable_COMMFILE
-									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL,"
-									+ "TranId INTEGER NOT NULL, ReqType SMALLINT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP,"
-									+ "Attribs VARCHAR(512), PRIMARY KEY (FileId,StreamId,TranId));");
-
-					stmt.close();
-
-					// DEBUG
-					log4j
-							.info("[mySQL] Created table "
-									+ TransactQueueTable_COMMFILE);
-				}
-				/*if(foundTrans_sharefile==false)
-				{
-					// Create the transaction request queue data table
-
-					Statement stmt = conn.createStatement();
-
-					stmt
-							.execute("CREATE TABLE "
-									+ TransactQueueTable_SHAREFILE
-									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL,"
-									+ "TranId INTEGER NOT NULL, ReqType SMALLINT, TempFile TEXT, VirtualPath TEXT, QueuedAt TIMESTAMP,"
-									+ "Attribs VARCHAR(512), PRIMARY KEY (FileId,StreamId,TranId));");
-
-					stmt.close();
-
-					// DEBUG
-					log4j
-							.info("[mySQL] Created table "
-									+ TransactQueueTable_SHAREFILE);
-				}*/
-				
-			}
-
-			// Check if the file data table should be created
-
-			if (isDataEnabled()) {
-
-//				if(foundData_myfile==false)
-//				{
-//					// Create the file data table
-//
-//					Statement stmt = conn.createStatement();
-//
-//					stmt
-//							.execute("CREATE TABLE "
-//									+ DataTable_MYFILE
-//									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, FragNo INTEGER, FragLen INTEGER, Data LONGBLOB, JarFile BIT, JarId INTEGER);");
-//
-//					stmt.execute("ALTER TABLE " + DataTable_MYFILE
-//							+ " ADD INDEX IFileStreamId (FileId,StreamId);");
-//					stmt.execute("ALTER TABLE " + DataTable_MYFILE
-//							+ " ADD INDEX IFileId (FileId);");
-//					stmt.execute("ALTER TABLE " + DataTable_MYFILE
-//							+ " ADD INDEX IFileIdFrag (FileId,FragNo);");
-//
-//					stmt.close();
-//
-//					// DEBUG
-//					log4j.info("[mySQL] Created table " + DataTable_MYFILE);
-//				}
-				if(foundData_commfile==false)
-				{
-					// Create the file data table
-
-					Statement stmt = conn.createStatement();
-
-					stmt
-							.execute("CREATE TABLE "
-									+ DataTable_COMMFILE
-									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, FragNo INTEGER, FragLen INTEGER, Data LONGBLOB, JarFile BIT, JarId INTEGER);");
-
-					stmt.execute("ALTER TABLE " + DataTable_COMMFILE
-							+ " ADD INDEX IFileStreamId (FileId,StreamId);");
-					stmt.execute("ALTER TABLE " + DataTable_COMMFILE
-							+ " ADD INDEX IFileId (FileId);");
-					stmt.execute("ALTER TABLE " + DataTable_COMMFILE
-							+ " ADD INDEX IFileIdFrag (FileId,FragNo);");
-
-					stmt.close();
-
-					// DEBUG
-					log4j.info("[mySQL] Created table " + DataTable_COMMFILE);
-				}
-//				if(foundData_sharefile==false)
-//				{
-//					// Create the file data table
-//
-//					Statement stmt = conn.createStatement();
-//
-//					stmt
-//							.execute("CREATE TABLE "
-//									+ DataTable_SHAREFILE
-//									+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, FragNo INTEGER, FragLen INTEGER, Data LONGBLOB, JarFile BIT, JarId INTEGER);");
-//
-//					stmt.execute("ALTER TABLE " + DataTable_SHAREFILE
-//							+ " ADD INDEX IFileStreamId (FileId,StreamId);");
-//					stmt.execute("ALTER TABLE " + DataTable_SHAREFILE
-//							+ " ADD INDEX IFileId (FileId);");
-//					stmt.execute("ALTER TABLE " + DataTable_SHAREFILE
-//							+ " ADD INDEX IFileIdFrag (FileId,FragNo);");
-//
-//					stmt.close();
-//
-//					// DEBUG
-//					log4j.info("[mySQL] Created table " + DataTable_SHAREFILE);
-//				}
-				
-			}
-
-			// Check if the Jar file data table should be created
-
-			if (isJarDataEnabled() && foundJarData == false) {
-
-				// Create the Jar file data table
-
-				Statement stmt = conn.createStatement();
-
-				stmt
-						.execute("CREATE TABLE "
-								+ JarDataTable
-								+ " (JarId INTEGER AUTO_INCREMENT, Data LONGBLOB, PRIMARY KEY (JarId));");
-
-				stmt.close();
-
-				// DEBUG
-				log4j.info("[mySQL] Created table " + JarDataTable);
-			}
-
-			// Check if the file id/object id mapping table should be created
-
-			if (isObjectIdEnabled() && foundObjId == false) {
-
-				// Create the file id/object id mapping table
-
-				Statement stmt = conn.createStatement();
-
-				stmt
-						.execute("CREATE TABLE "
-								+ ObjectIdTable
-								+ " (FileId INTEGER NOT NULL, StreamId INTEGER NOT NULL, ObjectId VARCHAR(128), PRIMARY KEY (FileId,StreamId))");
-
-				stmt.close();
-
-				// DEBUG
-
-				log4j.info("[mySQL] Created table " + ObjectIdTable);
-			}
-
-			// Check if the symbolic links table should be created
-
-			if (isSymbolicLinksEnabled() && foundSymLink == false) {
-
-				// Create the symbolic links table
-
-				Statement stmt = conn.createStatement();
-
-				stmt
-						.execute("CREATE TABLE "
-								+ SymLinkTable
-								+ " (FileId INTEGER NOT NULL PRIMARY KEY, SymLink VARCHAR(8192))");
-
-				stmt.close();
-
-				// DEBUG
-				log4j.info("[mySQL] Created table " + SymLinkTable);
-			}
-			
-			if(foundCommonRevisionValue==false)
-			{
-				// Create the CommonFile Revision Value mapping table
-
-				Statement stmt = conn.createStatement();
-
-				stmt.execute("CREATE TABLE `jweb_commonfilerevision_value` "+
-						"(max_value bigint(20) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;");
-				stmt.execute("REPLACE INTO `jweb_commonfilerevision_value` select max(revision) from jweb_commonfilecache;");				
-				stmt.close();
-				// DEBUG
-
-				log4j.info("[mySQL] Created table  `jweb_commonfilerevision_value`");
-			}
-		} catch (Exception ex) {
-			log4j.error("Error: " + ex.toString());
-		} finally {
-
-			// Release the database connection
-
-			if (conn != null)
-				releaseConnection(conn);
-		}
-		
-		initData = true;//已经初始化过
+			initData = true;// 已经初始化过
 		}
 	}
 
@@ -887,20 +954,9 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 *         FileStatus.DirectoryExists
 	 * @throws DBException
 	 */
-	public int fileExists(int dirId, String fname,String shareName) throws DBException {
-		String FileSysTableName = FileSysTable_COMMFILE;
-		String FileRevisionTableName = FileRevisionTable_COMMFILE;
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-			FileSysTableName = FileSysTable_MYFILE;
-			FileRevisionTableName = FileRevisionTable_MYFILE;
-		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-			FileSysTableName = FileSysTable_COMMFILE;
-			FileRevisionTableName = FileRevisionTable_COMMFILE;
-		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-		{
-			FileSysTableName = FileSysTable_SHAREFILE;
-			FileRevisionTableName = FileRevisionTable_SHAREFILE;
-		}
+	public int fileExists(int dirId, String fname, String shareName)
+			throws DBException {
+		String FileSysTableName = getRevisionTableName(shareName);
 		// Check if the file exists, and whether it is a file or folder
 		log4j.debug("DBI#fileExists ; fname:" + fname + ", dirId:" + dirId);
 		int sts = FileStatus.NotExist;
@@ -916,15 +972,25 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			conn = getConnection();
 			stmt = conn.createStatement();
 
-			String existSql = "SELECT name,isFile,lastModified,status FROM "+ FileSysTableName + " WHERE status>=0 AND pid ="+ dirId + " AND lower(name) = lower('"+ checkNameForSpecialChars(fname) + "') ;";
-			String delSql = "SELECT name,isFile,lastModified,status FROM "+ FileSysTableName+ " WHERE status >= -1 AND pid ="+ dirId + " AND lower(name) = lower('"+ checkNameForSpecialChars(fname) + "') ;";
+			String existSql = "SELECT name,isFile,lastModified,status FROM "
+					+ FileSysTableName + " WHERE status>=0 AND pid =" + dirId
+					+ " AND name = '"
+					+ checkNameForSpecialChars(fname) + "' ;";
+			String delSql = "SELECT name,isFile,lastModified,status FROM "
+					+ FileSysTableName + " WHERE status >= -1 AND pid ="
+					+ dirId + " AND name = '"
+					+ checkNameForSpecialChars(fname) + "' ;";
 
 			// if(dirId>-1)
 			if (dirId < 0)// 查用户(-1为用户层)
 			{
-//				existSql = "SELECT username as name,false as isFile,0 as lastModified,status FROM jweb_users WHERE status>=0 AND lower(username) = lower('"+ checkNameForSpecialChars(fname) + "') ;";
-//				delSql = "SELECT username as name,false as isFile,0 as lastModified,status FROM jweb_users WHERE status>=0 AND lower(username) = lower('"+ checkNameForSpecialChars(fname) + "') ;";
-				return sts = FileStatus.DirectoryExists;//用户层，直接返回存在
+				// existSql =
+				// "SELECT username as name,false as isFile,0 as lastModified,status FROM jweb_users WHERE status>=0 AND lower(username) = lower('"+
+				// checkNameForSpecialChars(fname) + "') ;";
+				// delSql =
+				// "SELECT username as name,false as isFile,0 as lastModified,status FROM jweb_users WHERE status>=0 AND lower(username) = lower('"+
+				// checkNameForSpecialChars(fname) + "') ;";
+				return sts = FileStatus.DirectoryExists;// 用户层，直接返回存在
 			}
 
 			// DEBUG
@@ -945,14 +1011,15 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 						sts = FileStatus.FileExists;
 					else
 						sts = FileStatus.DirectoryExists;
-				} else if(!fname.startsWith("~$")){
+				} else if (!fname.startsWith("~$")) {
 					// 删除不超过10秒(10000ms)也表示存在
 					log4j.debug("[mySQL] delSql SQL:" + existSql);
 					rs = stmt.executeQuery(delSql);
 					if (rs.next()) {
 						long lastTime = rs.getLong("lastModified");
 						int status = rs.getInt("status");
-						if (status >= 0 || System.currentTimeMillis() - lastTime <= delFileKeepTime) {
+						if (status >= 0
+								|| System.currentTimeMillis() - lastTime <= delFileKeepTime) {
 							// Check if the record is for a file or folder
 							// //1代表TRUE文件,0代表FALSE目录
 							if (rs.getBoolean("isFile") == true)
@@ -960,7 +1027,10 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 							else
 								sts = FileStatus.DirectoryExists;
 						} else {
-							log4j.info("DBI#fileExists fname:" + fname + " 已经存在一个status=-1 的 ，但存在时间已经超过: " + (System.currentTimeMillis() - lastTime) + "ms");
+							log4j.info("DBI#fileExists fname:" + fname
+									+ " 已经存在一个status=-1 的 ，但存在时间已经超过: "
+									+ (System.currentTimeMillis() - lastTime)
+									+ "ms");
 						}
 					}
 				}
@@ -969,7 +1039,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			}
 
 		} catch (Exception ex) {
-			log4j.error("DBI#fileExists 异常:",ex);
+			log4j.error("DBI#fileExists 异常:", ex);
 		} finally {
 
 			// Close the statement
@@ -995,6 +1065,17 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	/**
 	 * Create a file record for a new file or folder
 	 * 
+	 * 
+	 * 
+	 * 
+	 * 文件另存的时候，此方法执行两次docx(以docx为例,非临时文件)的保存，而shareName都是用户名如admin，不正确的
+	 * 
+	 * 第一次：只执行创建docx，故status == 4
+	 * 第二次：执行创建docx、创建临时文件、重命名临时文件、保存临时文件、删除临时文件等完整的操作
+	 * 
+	 * 故需要把第一次创建的docx删除。
+	 * 
+	 * 
 	 * @param fname
 	 *            String
 	 * @param dirId
@@ -1007,42 +1088,23 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 * @exception DBException
 	 * @exception FileExistsException
 	 */
-	public int createFileRecord(String fname, int dirId, FileOpenParams params,
+	public synchronized int createFileRecord(String fname, int dirId, FileOpenParams params,
 			boolean retain, String userName, String shareName, String ipAddress)
-			throws DBException, FileExistsException,AccessDeniedException {
+			throws DBException, FileExistsException, AccessDeniedException {
 
 		java.util.Date nowDate = new java.util.Date();// 时间的定义放在前面。这样即使中间操作花了较多时间。也可以用这个时间与原文件的时间比较
 		long timeNow = System.currentTimeMillis();
-		log4j.debug("DBI#createFileRecord time:" + nowDate.getTime() + ", fname:" + fname + ", shareName:" + shareName + "; path:" + params.getPath());
-		String FileSysTableName = FileSysTable_COMMFILE;
-		String FileRevisionTableName = FileRevisionTable_COMMFILE;
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-			FileSysTableName = FileSysTable_MYFILE;
-			FileRevisionTableName = FileRevisionTable_MYFILE;
-		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-			FileSysTableName = FileSysTable_COMMFILE;
-			FileRevisionTableName = FileRevisionTable_COMMFILE;
-		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-		{
-			FileSysTableName = FileSysTable_SHAREFILE;
-			FileRevisionTableName = FileRevisionTable_SHAREFILE;
-		}
+		//fname = checkNameForSpecialChars(fname);
+		log4j.debug("DBI#createFileRecord time:" + nowDate.getTime()
+				+ ", fname:" + fname + ", shareName:" + shareName + "; path:"
+				+ params.getPath());
+		
+		shareName = getShareName(dirId,shareName);
+		
+		String FileSysTableName = getFileSysTableName(shareName);
+		String FileRevisionTableName = getRevisionTableName(shareName);////////// 保存资料库文件的时候，此处shareName竟然为admin
 		// Create a new file record for a file/folder and return a unique file
 		// id
-		
-		// Office临时重命名的文件
-//		Pattern renamePattern = Pattern.compile(wpsRenameReg);
-//		Matcher rMatcher = renamePattern.matcher(fname);
-		boolean needCreateRevision = true;
-//		if (rMatcher.find()) {
-//			try {
-//				needCreateRevision = false;
-//				fname = fname.substring(0, fname.indexOf("~"));
-//			} catch (Exception e) {
-//				log4j.error("DBI#createFileRecord fname.substring ERROR:" + fname);
-//			}
-//		}
-
 		Connection conn = null;
 		PreparedStatement pstmt = null;
 		Statement stmt = null;
@@ -1075,67 +1137,42 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			// 获取组Id
 			String chkFileName = checkNameForSpecialChars(fname);
 			ResultSet rs;
-
-//			String sSql = "SELECT SUM(size)as size FROM jweb_filecache WHERE status >=0 AND userId = "
-//					+ userId;
-//			log4j.debug("[mySQL] sumSql SQL:" + sSql);
-//			rs = stmt.executeQuery(sSql);
-//			if (rs.next()) {
-//				userFileSize = rs.getLong("size");
-//			}
-//			rs.close();
-			/*
-			 * if(userSpaceSize == 0) //暂不用，先不查 { //个人未设置空间大小，则取全局空间大小 countSql
-			 * =
-			 * "SELECT value FROM jweb_config WHERE name='"+USERSPACE_MAXSIZE+"'"
-			 * ; log4j.debug("[mySQL] countSql SQL:"+countSql); rs =
-			 * stmt.executeQuery(countSql);//取全局空间大小 if(rs.next()) { try{
-			 * userSpaceSize = Long.parseLong(rs.getString("value"));
-			 * }catch(Exception e) {
-			 * log4j.error("\n\n ## Long.parseLong Exception ; "
-			 * +e.getMessage()); } } if(userSpaceSize<=0) { userSpaceSize =
-			 * 102400;//(单位M); } rs.close(); }
-			 */
-
-			// log4j.debug("  查询组  SQL语句 "+gSql.toString() );
-
-			// 如果使用的大小超过预定的百分之一 不允许上传
-			// if(userFileSize > 0){
-			// if(userSpaceSize-userFileSize/userSpaceSize<0.1){
-			// throw new DiskFullException("个人文件磁盘已满");
-			// }
-			// }
+			
 			String rootPath = "";// 第一次保存时，不保存存储池的路径
 			// 创建文件 查询权限
-			if ( (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS))) {
+			if (isCommonShare(shareName)) {
 				// 查询当前目录权限的Id
-				String PathSql = "SELECT permissionsFileId FROM "+ FileSysTableName+" WHERE id =" + dirId;
+				String PathSql = "SELECT permissionsFileId FROM "
+						+ FileSysTableName + " WHERE id =" + dirId;
 				log4j.debug("[mySQL] PathSql SQL:" + PathSql);
 				ResultSet pathRs = stmt.executeQuery(PathSql);
 				if (pathRs.next()) {
 					permissionsFileId = pathRs.getInt("permissionsFileId");
 				}
 				pathRs.close();
-				
-				boolean isSuperAdmin = false;//资料库用
-				boolean isFileAdmin = false;//资料库用
-				
+
+				boolean isSuperAdmin = false;// 资料库用
+				boolean isFileAdmin = false;// 资料库用
+
 				if (roleId == 1) {// 超级管理员权限 直接查询出来
 					isSuperAdmin = true;
-				}
-				else
-				{
+				} else {
 					// 查询是否为库管理员
 					if (dirId > 0) {
-						String auditorSql = "SELECT auditorId FROM "+ FileSysTableName+" WHERE id=(SELECT pid1 FROM "+FileSysTableName+" WHERE id=" + dirId + ")";
+						String auditorSql = "SELECT auditorId FROM "
+								+ FileSysTableName
+								+ " WHERE id=(SELECT pid1 FROM "
+								+ FileSysTableName + " WHERE id=" + dirId + ")";
 						try {
-							log4j.debug("[mySQL] auditorSql  SQL: " + auditorSql);
+							log4j.debug("[mySQL] auditorSql  SQL: "
+									+ auditorSql);
 							rs = stmt.executeQuery(auditorSql);
 							String auditorId = "";
 							while (rs.next()) {
-								auditorId = "," + rs.getString("auditorId") + ",";
+								auditorId = "," + rs.getString("auditorId")
+										+ ",";
 							}
-							
+
 							if (auditorId.contains("," + userId + ",")) {
 								isFileAdmin = true;// 是资料库管理员，有所有权限
 							}
@@ -1145,144 +1182,29 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 						}
 					}
 				}
-				
-				if(isSuperAdmin==false && isFileAdmin==false)
-				{
-					String groupIds = this.getGroupIdsByUserid(userId,conn);					// 查询部门的parentId
-					String departmentPath = this.getDepartmentPathById(departmentId,conn);
+
+				if (isSuperAdmin == false && isFileAdmin == false) {
+					String groupIds = this.getGroupIdsByUserid(userId, conn); // 查询部门的parentId
+					String departmentPath = this.getDepartmentPathById(
+							departmentId, conn);
 					String parentPermissions = "rw";
-					if(dirId>0)
-					{
-						parentPermissions = this.filePermissions(permissionsFileId, userId, groupIds, departmentPath,conn);
+					if (dirId > 0) {
+						parentPermissions = this.filePermissions(
+								permissionsFileId, userId, groupIds,
+								departmentPath, conn);
 					}
 					if (parentPermissions.contains("w") == false) {
-						log4j.error("ERROR 没有写权限 ; userId:" + userId + ",dirId:" + dirId + ",fname:" + fname);
+						log4j.error("ERROR 没有写权限 ; userId:" + userId
+								+ ",dirId:" + dirId + ",fname:" + fname);
 						throw new AccessDeniedException("没有权限");
 					}
 				}
 			}
-
-			String existsSql = null;
-			if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-				existsSql = "SELECT name,id ,lastModified,revisionCount,status FROM "+ FileSysTableName
-						+ " WHERE status>=0 AND LOWER(name) = LOWER('"+ checkNameForSpecialChars(chkFileName)+ "') AND pid = " + dirId + " ORDER BY revision DESC,id ASC";
-			} else {
-				existsSql = "SELECT name,id ,lastModified,revisionCount,status FROM "+ FileSysTableName
-					+ " WHERE status>=0 AND LOWER(name) = LOWER('"+ checkNameForSpecialChars(chkFileName)+ "') AND pid = "+ dirId+ " AND userId = "+ userId+ " ORDER BY revision DESC,id ASC";
-			}
-			// 查询重复文件
-			int fileStatus = 0;
+			
 			int revisionCount = 1;
-			synchronized (this)// 暂时改为同步。 避免产生重复文件
-			{
-				log4j.debug("[mySQL] existsSql SQL:" + existsSql);
-				rs = stmt.executeQuery(existsSql);
-				if (rs.next()) {
-					fileId = rs.getInt("id");
-					fileStatus = rs.getInt("status");
-					revisionCount = rs.getInt("revisionCount");
-					long lastTime = rs.getLong("lastModified");
-					if (fileStatus >= 0 && fileStatus != 4)// 文件已经存在
-					{
-						log4j.debug("File record already exists for " + fname
-								+ ", fileId=" + fileId);
-						if (needCreateRevision) {
-							revisionCount++;
-							// 插入版本记录(staus=4，正在编辑)
-							String insertSql = "insert into "
-									+ FileRevisionTableName
-									+ " (fileId,name,md5,size,lastModified,userId,revision,revisionCount,rollPath,status) values ("
-									+ fileId + ",'" + chkFileName+ "','md51',0," + nowDate.getTime() + ","
-									+ userId+ ",0," + revisionCount + ",'"+ rootPath + "',4)";
-							if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-								insertSql = "insert into "
-									+ FileRevisionTableName
-									+ " (fileId,name,md5,size,lastModified,userId,uploaderId,revision,revisionCount,rollPath,status) values ("
-									+ fileId + ",'" + chkFileName+ "','md51',0," + nowDate.getTime() + ","
-									+ userId +","+userId+ ",0," + revisionCount + ",'"+ rootPath + "',4)";
-							}
-							log4j.debug("[mySQL] insertSql SQL:" + insertSql);
-							stmt.executeUpdate(insertSql);
-
-							String upSql = "UPDATE " + FileSysTableName+ " SET revisionCount=" + revisionCount+ ",status=4,lastModified="+ nowDate.getTime() + " WHERE id=" + fileId;
-							log4j.debug("[mySQL] 更新文件状态 SQL:" + upSql);
-							stmt.executeUpdate(upSql);
-						}
-
-						return fileId;
-					} else {
-						log4j.debug("File record already exists update for "
-								+ fname + ", fileId=" + fileId);
-						if (needCreateRevision) {
-							revisionCount++;
-							// 插入版本记录(staus=4，正在编辑)
-							String insertSql = "insert into "
-									+ FileRevisionTableName
-									+ " (fileId,name,md5,size,lastModified,userId,revision,revisionCount,rollPath,status) values ("
-									+ fileId + ",'" + chkFileName+ "','md51',0," + nowDate.getTime() + ","+ userId + ",0," + revisionCount + ",'"+ rootPath + "',4)";
-							if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-								insertSql = "insert into "
-									+ FileRevisionTableName
-									+ " (fileId,name,md5,size,lastModified,userId,uploaderId,revision,revisionCount,rollPath,status) values ("
-									+ fileId + ",'" + chkFileName+ "','md51',0," + nowDate.getTime() + ","+ userId +","+userId+ ",0," + revisionCount + ",'"+ rootPath + "',4)";
-							}
-							log4j.debug("[mySQL] insertSql SQL:" + insertSql);
-							stmt.executeUpdate(insertSql);
-
-							String upSql = "UPDATE " + FileSysTableName+ " SET revisionCount=" + revisionCount+ ",status=4,lastModified="+ nowDate.getTime() + " WHERE id=" + fileId;
-							log4j.debug("[mySQL] 更新文件状态 SQL:" + upSql);
-							stmt.executeUpdate(upSql);
-						}
-
-						// 文件已经存在，则不用再执行下面的插入sql
-						return fileId;
-					}
-				} else {
-					// 删除不超过10秒(10000ms)也表示存在。则不新建
-					log4j.debug("[mySQL] existsSql del SQL:"
-							+ existsSql.replace("status>=0", "status=-1"));
-					rs = stmt.executeQuery(existsSql.replace("status>=0",
-							"status>=-1"));
-					if (rs.next()) {
-						fileId = rs.getInt("id");
-						long lastTime = rs.getLong("lastModified");
-						fileStatus = rs.getInt("status");
-						if (fileStatus >= 0
-								|| nowDate.getTime() - lastTime <= delFileKeepTime) {
-							if (needCreateRevision) {
-								revisionCount++;
-								// 插入版本记录(staus=4，正在编辑)
-								String insertSql = "insert into "
-										+ FileRevisionTableName
-										+ " (fileId,name,md5,size,lastModified,userId,revision,revisionCount,rollPath,status) values ("
-										+ fileId + ",'" + chkFileName+ "','md51',0," + nowDate.getTime()+ "," + userId + ",0," + revisionCount+ ",'" + rootPath + "',4)";
-								if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-									insertSql = "insert into "
-										+ FileRevisionTableName
-										+ " (fileId,name,md5,size,lastModified,userId,uploaderId,revision,revisionCount,rollPath,status) values ("
-										+ fileId + ",'" + chkFileName+ "','md51',0," + nowDate.getTime()+ "," + userId +","+userId+ ",0," + revisionCount+ ",'" + rootPath + "',4)";
-								}
-								log4j.debug("[mySQL] insertSql SQL:"+ insertSql);
-								stmt.executeUpdate(insertSql);
-
-								String upSql = "UPDATE "+ FileSysTableName+ " SET revisionCount=" + revisionCount+ ",status=4,lastModified="+ nowDate.getTime() + " WHERE id="+ fileId;
-								log4j.debug("[mySQL] 更新已删除文件状态 SQL:" + upSql);
-								stmt.executeUpdate(upSql);
-							}
-
-							return fileId;
-						} else {
-							log4j.info("DBI#createFileRecord fname:" + fname
-									+ " 已经存在一个status=-1 的 ，但存在时间已经超过: "
-									+ (System.currentTimeMillis() - lastTime)
-									+ "ms");
-						}
-					}
-				}
-			}
 			// 查询最大版本数 及数据库中相关path值
 			boolean dirRec = params.isDirectory();
-			String path2 = null;
+			String path2 = "";
 			String pathName = null;
 			String realPath = null;
 			int pid = 0;
@@ -1290,38 +1212,69 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			int pid2 = 0;// 二级目录id
 			String pathIds = "";
 			int revision = 1;
-			if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS))
-			{
-				//资料库获得版本号
-				stmt.executeUpdate(updateMaxRevision_hql);
-				rs = stmt.executeQuery(findMaxRevision_hql);
-				if (rs.next()) {
-					revision = rs.getInt("max_value");
-				}
-				rs.close();
-			}
-			else
-			{
-				String vsql = "SELECT max(revision) as revision FROM " + FileRevisionTableName;			
+			/*
+			 * if (shareName.equals(DBUtil.SHARENAME_COMMFILE) ||
+			 * shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS)) { //资料库获得版本号
+			 * stmt.executeUpdate(updateMaxRevision_hql); rs =
+			 * stmt.executeQuery(findMaxRevision_hql); if (rs.next()) { revision
+			 * = rs.getInt("max_value"); } rs.close(); } else { String vsql =
+			 * "SELECT max(revision) as revision FROM " + FileRevisionTableName;
+			 * if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) { vsql
+			 * = "SELECT max(revision) as revision FROM " +
+			 * FileRevisionTableName + "  WHERE userId =" + userId; }
+			 * log4j.debug("[mySQL] vsql SQL:" + vsql); rs =
+			 * stmt.executeQuery(vsql); if (rs.next()) { revision =
+			 * rs.getInt("revision") + 1; } rs.close(); }
+			 */
+			// 以上注释，用以下方式，防止shareName为空，资料库版本获得失败
+			if (shareName.equals(DBUtil.SHARENAME_USERFILE)
+					|| shareName.equals(DBUtil.SHARENAME_RECIVEFILE)) {
+				String vsql = "SELECT max(revision) as revision FROM "
+						+ FileRevisionTableName;
 				if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-					vsql = "SELECT max(revision) as revision FROM " + FileRevisionTableName + "  WHERE userId =" + userId;
+					vsql = "SELECT max(revision) as revision FROM "
+							+ FileRevisionTableName + "  WHERE userId ="
+							+ userId;
 				}
 				log4j.debug("[mySQL] vsql SQL:" + vsql);
 				rs = stmt.executeQuery(vsql);
 				if (rs.next()) {
-					revision = rs.getInt("revision") + 1;
+					try {
+						if (null != rs)
+							revision = rs.getInt("revision") + 1;
+					} catch (Exception e) {
+						log4j.error("DBI#createFileRecord 获得revision值错误 :"
+								+ e.getMessage() + "\nSQL:" + vsql);
+					}
+				}
+				rs.close();
+			} else {
+				// 资料库获得版本号
+				stmt.executeUpdate(updateMaxRevision_hql);
+				rs = stmt.executeQuery(findMaxRevision_hql);
+				if (rs.next()) {
+					try {
+						if (null != rs)
+							revision = rs.getInt("max_value");
+					} catch (Exception e) {
+						log4j.error("DBI#createFileRecord 获得revision值错误 :"
+								+ e.getMessage());
+					}
 				}
 				rs.close();
 			}
-			
+
 			// Check if a file or folder record should be created
 			if (dirId == 0) {
 				realPath = "/";
-			} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			} else if (isCommonShare(shareName)) {
 				// 先不查询状态 String sql =
 				// "SELECT path ,name FROM jweb_filecache WHERE status>=0 AND isFile=0 AND id ="+dirId;
 				// isFile:1代表TRUE文件,0代表FALSE目录
-				String sql = "SELECT path ,name,pid1,pid2 ,pid ,pathids,permissionsFileId FROM "+ FileSysTableName + " WHERE  isFile=0 AND id ="+ dirId;
+				String sql = "SELECT path ,name,pid1,pid2 ,pid ,pathids,permissionsFileId FROM "
+						+ FileSysTableName
+						+ " WHERE  isFile=0 AND id ="
+						+ dirId;
 				log4j.debug("[mySQL] old file SQL:" + sql);
 				ResultSet pRs = stmt.executeQuery(sql);
 				if (pRs.next()) {
@@ -1341,7 +1294,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				}
 			} else {
 				// isFile:1代表TRUE文件,0代表FALSE目录
-				String sql = "SELECT path ,name FROM " + FileSysTableName+ " WHERE  isFile=0 AND id =" + dirId;
+				String sql = "SELECT path ,name FROM " + FileSysTableName
+						+ " WHERE  isFile=0 AND id =" + dirId;
 				log4j.debug("[mySQL] path SQL:" + sql);
 				ResultSet pRs = stmt.executeQuery(sql);
 				if (pRs.next()) {
@@ -1355,9 +1309,10 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 					realPath = path2 + "/" + pathName;
 				}
 			}
-
+			
+			conn.setAutoCommit(false);
 			// 保存到数据库当中去
-			if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			if (isCommonShare(shareName)) {
 				pstmt = conn
 						.prepareStatement("INSERT INTO "
 								+ FileSysTableName
@@ -1434,14 +1389,18 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				rs2.close();
 				// Check if the returned file id is valid
 				if (fileId == -1) {
+					if (conn != null) conn.rollback();
 					log4j.error("Failed to get file id for " + fname);
 					throw new DBException("Failed to get file id for " + fname);
 				}
 
-				if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-//					String qStr = "insert into jweb_systemrole_commonfile (role_id,file_id,role_value,role_type,ip) values("+ userId+ ","+ fileId+ ",'brltwpdguema',"+ 0+ ",'" + ipAddress + "')";
-//					log4j.debug("[mySQL] insert log SQL: " + qStr);
-//					stmt.executeUpdate(qStr); 不保存创建者权限
+				if (isCommonShare(shareName)) {
+					// String qStr =
+					// "insert into jweb_systemrole_commonfile (role_id,file_id,role_value,role_type,ip) values("+
+					// userId+ ","+ fileId+ ",'brltwpdguema',"+ 0+ ",'" +
+					// ipAddress + "')";
+					// log4j.debug("[mySQL] insert log SQL: " + qStr);
+					// stmt.executeUpdate(qStr); 不保存创建者权限
 					// 更新pid1,pid2,pathIds 值
 					if (dirId == 0)// 上传目录为根目录
 					{
@@ -1456,10 +1415,15 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 					} else {
 						pathIds = pathIds + "," + fileId;
 					}
-					String upSql = "update jweb_commonfilecache set pid1="+ pid1 + ",pid2=" + pid2 + ",pathids ='" + pathIds+ "',permissionsFileId="+permissionsFileId+" WHERE id = " + fileId;
-					if(dirId==0)
-					{
-						upSql = "update jweb_commonfilecache set pid1="+ pid1 + ",pid2=" + pid2 + ",pathids ='" + pathIds+ "',permissionsFileId="+pid1+" WHERE id = " + fileId;
+					String upSql = "update jweb_commonfilecache set pid1="
+							+ pid1 + ",pid2=" + pid2 + ",pathids ='" + pathIds
+							+ "',permissionsFileId=" + permissionsFileId
+							+ " WHERE id = " + fileId;
+					if (dirId == 0) {
+						upSql = "update jweb_commonfilecache set pid1=" + pid1
+								+ ",pid2=" + pid2 + ",pathids ='" + pathIds
+								+ "',permissionsFileId=" + pid1
+								+ " WHERE id = " + fileId;
 					}
 					log4j.debug("[mySQL] upSql SQL:" + upSql);
 					stmt.executeUpdate(upSql);
@@ -1471,8 +1435,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 					// Create a retention record for the new file/directory
 
-					Timestamp startDate = new Timestamp(System
-							.currentTimeMillis());
+					Timestamp startDate = new Timestamp(
+							System.currentTimeMillis());
 					Timestamp endDate = new Timestamp(startDate.getTime()
 							+ getRetentionPeriod());
 
@@ -1510,12 +1474,35 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				// 插入版本记录(staus=4，正在编辑)
 				String insertSql = "insert into "
 						+ FileRevisionTableName
-						+ " (fileId,name,md5,size,lastModified,userId,revision,revisionCount,rollPath,status) values ("+ fileId + ",'" + chkFileName + "','md51',0,"+ nowDate.getTime() + "," + userId + "," + revision+ "," + revisionCount + ",'" + rootPath + "',4)";
+						+ " (fileId,baseFileId,md5,size,lastModified,userId,revision,revisionCount,rollPath,status) values ("
+						+ fileId + "," + fileId + ",'md51',0," + nowDate.getTime() + "," + userId
+						+ "," + revision + "," + revisionCount + ",'"
+						+ rootPath + "',4)";
 				log4j.debug("[mySQL] insertSql SQL:" + insertSql);
 				stmt.executeUpdate(insertSql);
-				log4j.debug("[mySQL] Created file name=" + fname + ", dirId="+ dirId + ", fileId=" + fileId);
+				log4j.debug("[mySQL] Created file name=" + fname + ", dirId="
+						+ dirId + ", fileId=" + fileId);
+				
+				
+				String ext = DiskUtil.getExt(fname);
+				if (DBUtil.SUPPORT_EXT.contains(ext) && !fname.startsWith("~$")) {
+					String logDesc = "CIFS新建文件";
+					this.UpLog((int) userId, dirId, fileId,
+							revision, new java.util.Date(),
+							logDesc,"N",ipAddress,
+							FileRevisionTableName,
+							FileSysTableName, conn);
+				}
 			}
+			conn.commit();
 		} catch (SQLException ex) {
+			
+			try {
+				if (conn != null) conn.rollback();
+			} catch (SQLException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 
 			// Check for a duplicate key error, another client may have created
 			// the file
@@ -1529,7 +1516,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			} else {
 
 				// Rethrow the exception
-				log4j.error("DBI#createFileRecord ERROR " , ex);
+				log4j.error("DBI#createFileRecord ERROR ", ex);
 				throw new DBException(ex.getMessage());
 			}
 		} catch (DBException ex) {
@@ -1562,9 +1549,14 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			}
 
 			// Release the database connection
-
-			if (conn != null)
+			if (conn != null) {
+				try {
+					conn.setAutoCommit(true);
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
 				releaseConnection(conn);
+			}
 		}
 
 		// If a duplicate key error occurred get the previously allocated file
@@ -1578,7 +1570,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 					userName);
 
 			// DEBUG
-			log4j.info("[mySQL] Duplicate key error, lookup file id, dirId="+ dirId + ", fname=" + fname + ", fid=" + fileId);
+			log4j.info("[mySQL] Duplicate key error, lookup file id, dirId="
+					+ dirId + ", fname=" + fname + ", fid=" + fileId);
 		}
 
 		// Return the allocated file id
@@ -1613,8 +1606,13 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 			long timeNow = System.currentTimeMillis();
 
-//			stmt = conn.prepareStatement("INSERT INTO "+ getStreamsTableName()+ "(FileId,StreamName,CreateDate,ModifyDate,AccessDate,StreamSize) VALUES (?,?,?,?,?,?)");
-			stmt = conn.prepareStatement("REPLACE INTO "+ getStreamsTableName()+ "(FileId,StreamName,CreateDate,ModifyDate,AccessDate,StreamSize) VALUES (?,?,?,?,?,?)");
+			// stmt = conn.prepareStatement("INSERT INTO "+
+			// getStreamsTableName()+
+			// "(FileId,StreamName,CreateDate,ModifyDate,AccessDate,StreamSize) VALUES (?,?,?,?,?,?)");
+			stmt = conn
+					.prepareStatement("REPLACE INTO "
+							+ getStreamsTableName()
+							+ "(FileId,StreamName,CreateDate,ModifyDate,AccessDate,StreamSize) VALUES (?,?,?,?,?,?)");
 			// stmt =
 			// conn.prepareStatement("INSERT INTO jweb_JLANTransQueue (FileId,StreamName,CreateDate,ModifyDate,AccessDate,StreamSize) VALUES (?,?,?,?,?,?)");
 			stmt.setInt(1, fid);
@@ -1691,27 +1689,17 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 * @throws DiskOfflineException
 	 * @throws AccessDeniedException
 	 */
-	public void deleteFileRecord(int dirId, int fid, boolean markOnly,
+	public synchronized void deleteFileRecord(int dirId, int fid, boolean markOnly,
 			String userName, String shareName, String ipAddress)
 			throws DBException, AccessDeniedException {
-
+		shareName = getShareName(dirId, shareName);// 处理另存后不关闭继续编辑关闭后文件不见的问题，因为另存的时候shareName不正确的情况，默认即资料库share
 		// Create a new file stream attached to the specified file
-		log4j.debug("DBI#deleteFileRecord ; dirId:" + dirId + " ,fid:" + fid + " , userName:" + userName + " ,shareName:" + shareName + " ,markOnly:" + markOnly);
+		log4j.debug("DBI#deleteFileRecord ; dirId:" + dirId + " ,fid:" + fid
+				+ " , userName:" + userName + " ,shareName:" + shareName
+				+ " ,markOnly:" + markOnly);
 		// Delete a file record FROM the database, or mark the file record as
 		// deleted
-		String FileSysTableName = FileSysTable_COMMFILE;
-		String FileRevisionTableName = FileRevisionTable_COMMFILE;
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-			FileSysTableName = FileSysTable_MYFILE;
-			FileRevisionTableName = FileRevisionTable_MYFILE;
-		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-			FileSysTableName = FileSysTable_COMMFILE;
-			FileRevisionTableName = FileRevisionTable_COMMFILE;
-		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-		{
-			FileSysTableName = FileSysTable_SHAREFILE;
-			FileRevisionTableName = FileRevisionTable_SHAREFILE;
-		}
+		String FileSysTableName = getFileSysTableName(shareName);
 		Connection conn = null;
 		Statement stmt = null;
 		int userId = 0;
@@ -1733,51 +1721,57 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			// Delete the file entry FROM the database
 			stmt = conn.createStatement();
 			String sql = null;
-			
+
 			synchronized (this)// 暂时改为同步
 			{
-				
+
 				String fileName = "";
-				if(shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS))
-				{
+				String path = "";
+				if (isCommonShare(shareName)) {
 					long permissionsFileId = 0;
 					// 查询当前目录权限的Id
-					String PathSql = "SELECT permissionsFileId,name FROM "+ FileSysTableName+" WHERE id =" + fid;
+					String PathSql = "SELECT permissionsFileId,name,path FROM "
+							+ FileSysTableName + " WHERE id =" + fid;
 					log4j.debug("[mySQL] PathSql SQL:" + PathSql);
 					ResultSet pathRs = stmt.executeQuery(PathSql);
 					if (pathRs.next()) {
 						permissionsFileId = pathRs.getInt("permissionsFileId");
 						fileName = pathRs.getString("name");
+						path = pathRs.getString("path");
 					}
-					if(permissionsFileId<=0)
-					{
-						PathSql = "SELECT permissionsFileId FROM "+ FileSysTableName+" WHERE id =" + dirId;
+					if (permissionsFileId <= 0) {
+						PathSql = "SELECT permissionsFileId FROM "
+								+ FileSysTableName + " WHERE id =" + dirId;
 						log4j.debug("[mySQL] PathSql SQL:" + PathSql);
 						pathRs = stmt.executeQuery(PathSql);
 						if (pathRs.next()) {
-							permissionsFileId = pathRs.getInt("permissionsFileId");
+							permissionsFileId = pathRs
+									.getInt("permissionsFileId");
 						}
 					}
 					pathRs.close();
-					
-					boolean isSuperAdmin = false;//资料库用
-					boolean isFileAdmin = false;//资料库用
-					
+
+					boolean isSuperAdmin = false;// 资料库用
+					boolean isFileAdmin = false;// 资料库用
+
 					if (roleId == 1) {// 超级管理员权限 直接查询出来
 						isSuperAdmin = true;
-					}
-					else
-					{
+					} else {
 						// 查询是否为库管理员
-						String auditorSql = "SELECT auditorId FROM "+ FileSysTableName+" WHERE id=(SELECT pid1 FROM "+ FileSysTableName+" WHERE id=" + fid + ")";
+						String auditorSql = "SELECT auditorId FROM "
+								+ FileSysTableName
+								+ " WHERE id=(SELECT pid1 FROM "
+								+ FileSysTableName + " WHERE id=" + fid + ")";
 						try {
-							log4j.debug("[mySQL] auditorSql  SQL: " + auditorSql);
+							log4j.debug("[mySQL] auditorSql  SQL: "
+									+ auditorSql);
 							ResultSet rs2 = stmt.executeQuery(auditorSql);
 							String auditorId = "";
 							while (rs2.next()) {
-								auditorId = "," + rs2.getString("auditorId") + ",";
+								auditorId = "," + rs2.getString("auditorId")
+										+ ",";
 							}
-							
+
 							if (auditorId.contains("," + userId + ",")) {
 								isFileAdmin = true;// 是资料库管理员，有所有权限
 							}
@@ -1786,89 +1780,148 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 							log4j.error("公共资料库 查询组、部门失败", e);
 						}
 					}
-					
-					if(isSuperAdmin==false && isFileAdmin==false)
-					{
-						String groupIds = this.getGroupIdsByUserid(userId,conn);
+
+					if (isSuperAdmin == false && isFileAdmin == false) {
+						String groupIds = this
+								.getGroupIdsByUserid(userId, conn);
 						// 查询部门的parentId
-						String departmentPath = this.getDepartmentPathById(departmentId,conn);
-						String parentPermissions = "rw";
-						if(dirId>0)
-						{
-							parentPermissions = this.filePermissions(permissionsFileId, userId, groupIds, departmentPath,conn);
+						String departmentPath = this.getDepartmentPathById(
+								departmentId, conn);
+						String parentPermissions = "br";
+						if (dirId > 0) {
+							parentPermissions = this.filePermissions(
+									permissionsFileId, userId, groupIds,
+									departmentPath, conn);
 						}
 						if (parentPermissions.contains("w") == false) {
-							log4j.error("ERROR 没有操作权限 ; userId:" + userId + ",dirId:" + dirId + ",fid:" + fid);
+							log4j.error("ERROR 没有操作权限 ; userId:" + userId
+									+ ",dirId:" + dirId + ",fid:" + fid);
 							throw new AccessDeniedException("没有操作权限");
 						}
 					}
-				}
-				else
-				{
-					//查名称
-					String PathSql = "SELECT name FROM " + FileSysTableName + " WHERE id="+fid;
+				} else {
+					// 查名称
+					String PathSql = "SELECT name,path FROM " + FileSysTableName
+							+ " WHERE id=" + fid;
 					log4j.debug("[mySQL] nameSql SQL:" + PathSql);
 					ResultSet pathRs = stmt.executeQuery(PathSql);
 					if (pathRs.next()) {
 						fileName = pathRs.getString("name");
+						path = pathRs.getString("path");
 					}
 				}
 				
-				log4j.debug("******markOnly = " + markOnly + ", dirId:" + dirId + ",fid:" + fid +", fileName:"+fileName+ ",shareName:" + shareName);
+				String fileVirtualPath = "/"+shareName+path.toUpperCase()+"/"+fileName;
+				fileVirtualPath = fileVirtualPath.replace('\\', '/');
+				if (this.baseFileId > 0 && fileRenamed.contains(fileVirtualPath)) {
+					// 此处代码是非常有必要的， 否则可能导致excel/doc文件编辑之后被删除， 
+					// 因为excel文件的delete操作慢于rename操作。
+					log4j.debug("成功阻止了非法的删除：" + fileVirtualPath);
+					return;
+				}
+				
+				conn.setAutoCommit(false);
+				log4j.debug("******markOnly = " + markOnly + ", dirId:" + dirId
+						+ ",fid:" + fid + ", fileName:" + fileName + ", FILEVIRTUALPATH ++++ :" + fileVirtualPath
+						+ ",shareName:" + shareName);
 				if (markOnly == true)// 标识性删除，可回收
 				{
-					sql = "UPDATE " + FileSysTableName + " SET status = -1,lastModified=" + nowDate.getTime() + " WHERE status>-1 AND id = " + fid;
+					sql = "UPDATE " + FileSysTableName
+							+ " SET status = -1,lastModified="
+							+ nowDate.getTime() + " WHERE status>-1 AND id = "
+							+ fid;
 					// sql = "UPDATE " + getFileSysTableName() +
 					// " SET status = 4 WHERE id = " + fid; //标识为正在更新中
 				} else// 彻底删除，不可回收（暂不做彻底删除）
 				{
-					// sql = "DELETE FROM " + getFileSysTableName() + " WHERE id = "
+					// sql = "DELETE FROM " + getFileSysTableName() +
+					// " WHERE id = "
 					// + fid;
-					sql = "UPDATE " + FileSysTableName + " SET status = -1,lastModified=" + nowDate.getTime()+ " WHERE status>-1 AND id = " + fid;
+					sql = "UPDATE " + FileSysTableName
+							+ " SET status = -1,lastModified="
+							+ nowDate.getTime() + " WHERE status>-1 AND id = "
+							+ fid;
 				}
 				String ext = DiskUtil.getExt(fileName);
-				if(fileName.startsWith("~$") && (ext.equals("doc")||ext.equals("docx")||ext.equals("xls")||ext.equals("xlsx")||ext.equals("ppt")||ext.equals("pptx")))
-				{
-					sql = "UPDATE " + FileSysTableName + " SET status = -2,lastModified=" + nowDate.getTime()+ " WHERE status>-1 AND id = " + fid;
+				if (fileName.startsWith("~$")
+						&& isOfficeFile(ext)) {
+					sql = "UPDATE " + FileSysTableName
+							+ " SET status = -2,lastModified="
+							+ nowDate.getTime() + " WHERE status>-1 AND id = "
+							+ fid;
 				}
 				log4j.debug("[mySQL] Delete file SQL: " + sql);
-	
+
 				// Delete the file/folder, or mark as deleted
-			
+
 				// 正常的删除为，要先插入一条版本记录，这里以后需要改进
 				int recCnt = stmt.executeUpdate(sql);
 				if (recCnt == 0) {
-					sql = "SELECT id,name FROM " + FileSysTableName + " WHERE status>=0 AND id = " + fid;
+					sql = "SELECT id,name FROM " + FileSysTableName
+							+ " WHERE status>=0 AND id = " + fid;
 					log4j.debug("[mySQL] SQL: " + sql);
 					ResultSet rs = stmt.executeQuery(sql);
 					while (rs.next()) {
 						log4j.debug("Found file " + rs.getString("name"));
-						log4j.error("Failed to delete file record for fid=" + fid);
-						throw new DBException("Failed to delete file record for fid="+ fid);
+						log4j.error("Failed to delete file record for fid="
+								+ fid);
+						if (conn != null) conn.rollback();
+						throw new DBException(
+								"Failed to delete file record for fid=" + fid);
+					}
+				} else {
+					
+					if (DBUtil.SUPPORT_EXT.contains(ext) && !fileName.startsWith("~$")) {
+						// DEBUG
+						if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+							String sqlLog = "insert into jweb_file_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
+									+ userId
+									+ ","
+									+ dirId
+									+ ","
+									+ fid
+									+ ","
+									+ 1
+									+ ",'CIFS删除文件','"
+									+ ipAddress
+									+ "','"
+									+ sf.format(nowDate)
+									+ "','CIFS','e',"
+									+ 0
+									+ "," + 0 + ")";
+							log4j.debug("[mySQL] sqlLog SQL: " + sqlLog);
+							stmt.executeUpdate(sqlLog);
+						} else if (isCommonShare(shareName)) {
+							String sqlLog = "insert into jweb_commonfile_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
+									+ userId
+									+ ","
+									+ dirId
+									+ ","
+									+ fid
+									+ ","
+									+ 1
+									+ ",'CIFS删除文件','"
+									+ ipAddress
+									+ "','"
+									+ sf.format(nowDate)
+									+ "','CIFS','e',"
+									+ 0
+									+ "," + 0 + ")";
+							log4j.debug("[mySQL] sqlLog SQL: " + sqlLog);
+							stmt.executeUpdate(sqlLog);
+						}
 					}
 				}
-				else
-				{
-					// DEBUG
-					if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-						String sqlLog = "insert into jweb_file_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
-								+ userId+ ","+ dirId+ ","+ fid+ ","+ 1+ ",'CIFS删除文件','"+ ipAddress+ "','"+ sf.format(nowDate)+ "','CIFS','e',"+ 0+ ","+ 0 + ")";
-						log4j.debug("[mySQL] sqlLog SQL: " + sqlLog);
-						stmt.executeUpdate(sqlLog);
-					} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-						String sqlLog = "insert into jweb_commonfile_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
-								+ userId+ ","+ dirId+ ","+ fid+ ","+ 1+ ",'CIFS删除文件','"+ ipAddress+ "','"+ sf.format(nowDate)+ "','CIFS','e',"+ 0+ ","+ 0 + ")";
-						log4j.debug("[mySQL] sqlLog SQL: " + sqlLog);
-						stmt.executeUpdate(sqlLog);
-					}
-				}
+
+				conn.commit();
 			}
 			// Check if retention is enabled
 
 			if (isRetentionEnabled()) {
 
 				// Delete the retention record for the file
-				sql = "DELETE FROM " + getRetentionTableName()+ " WHERE id = " + fid;
+				sql = "DELETE FROM " + getRetentionTableName() + " WHERE id = "
+						+ fid;
 				// DEBUG
 
 				log4j.debug("[mySQL] Delete retention SQL: " + sql);
@@ -1876,7 +1929,15 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 				stmt.executeUpdate(sql);
 			}
+			
 		} catch (SQLException ex) {
+			
+			try {
+				if (conn != null) conn.rollback();
+			} catch (SQLException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 
 			// DEBUG
 
@@ -1898,8 +1959,14 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 			// Release the database connection
 
-			if (conn != null)
+			if (conn != null) {
+				try {
+					conn.setAutoCommit(true);
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
 				releaseConnection(conn);
+			}
 		}
 	}
 
@@ -1918,10 +1985,11 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			throws DBException {
 
 		// Delete a file stream FROM the database, or mark the stream as deleted
-		log4j.debug("DBI#deleteStreamRecord ; fid:" + fid + " , stid:" + stid + " ,markOnly:" + markOnly);
+		log4j.debug("DBI#deleteStreamRecord ; fid:" + fid + " , stid:" + stid
+				+ " ,markOnly:" + markOnly);
 		Connection conn = null;
 		Statement stmt = null;
-		
+
 		try {
 
 			// Get a database connection
@@ -1978,103 +2046,116 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 *            FileInfo
 	 * @exception DBException
 	 */
-	public void setFileInformation(int dirId, int fid, FileInfo finfo,String shareName)
-			throws DBException {
-		
-		if(null != finfo && (finfo.hasSetFlag(FileInfo.SetFileSize) || finfo.hasSetFlag(FileInfo.SetModifyDate)) )
-		{
-		// Set file information fields
-		log4j.debug("DBI#setFileInformation ; fid:" + fid + " , dirId:" + dirId + " ,setSize:" + finfo.hasSetFlag(FileInfo.SetFileSize)+" ,SetModifyDate:"+finfo.hasSetFlag(FileInfo.SetModifyDate));
-		Connection conn = null;
-		Statement stmt = null;
-		java.util.Date nowDate = new java.util.Date();
-		
-		String FileSysTableName = FileSysTable_COMMFILE;
-		String FileRevisionTableName = FileRevisionTable_COMMFILE;
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-			FileSysTableName = FileSysTable_MYFILE;
-			FileRevisionTableName = FileRevisionTable_MYFILE;
-		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-			FileSysTableName = FileSysTable_COMMFILE;
-			FileRevisionTableName = FileRevisionTable_COMMFILE;
-		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-		{
-			FileSysTableName = FileSysTable_SHAREFILE;
-			FileRevisionTableName = FileRevisionTable_SHAREFILE;
+	public synchronized void setFileInformation(int dirId, int fid, FileInfo finfo,
+			String shareName) throws DBException {
+
+		if (finfo.getSize() == 0) {// finfo.isDirectory() 永远都是false
+//			log4j.error("DBD#setFileInformation() filesize == 0 !");
+			return;
 		}
-		try {
 
-			// Get a connection to the database
+		if (null != finfo
+				&& (finfo.hasSetFlag(FileInfo.SetFileSize) || finfo
+						.hasSetFlag(FileInfo.SetModifyDate))) {
+			// Set file information fields
+			log4j.debug("DBI#setFileInformation ; fid:" + fid + " , dirId:"
+					+ dirId + " ,setSize:"
+					+ finfo.hasSetFlag(FileInfo.SetFileSize)
+					+ " ,SetModifyDate:"
+					+ finfo.hasSetFlag(FileInfo.SetModifyDate));
+			Connection conn = null;
+			Statement stmt = null;
+			java.util.Date nowDate = new java.util.Date();
 
-			conn = getConnection();
-			stmt = conn.createStatement();
-			// Build the SQL statement to update the file information settings
+			String FileSysTableName = getFileSysTableName(shareName);
+			try {
 
-			StringBuffer sql = new StringBuffer(256);
-			sql.append("UPDATE ");
-			sql.append(FileSysTableName);
-			sql.append(" SET ");
+				// Get a connection to the database
 
-			// Check if the file size should be set
-			if (finfo.hasSetFlag(FileInfo.SetFileSize)) {
-				// Update the file size
+				conn = getConnection();
+				conn.setAutoCommit(false);
+				stmt = conn.createStatement();
+				// Build the SQL statement to update the file information
+				// settings
 
-				sql.append("size = ");
-				sql.append(finfo.getSize());
-			}
-			// Check if the modify date/time has been set
+				StringBuffer sql = new StringBuffer(256);
+				sql.append("UPDATE ");
+				sql.append(FileSysTableName);
+				sql.append(" SET ");
 
-			if (finfo.hasSetFlag(FileInfo.SetModifyDate)) {
-				// Add the SQL to update the modify date/time
+				// Check if the file size should be set
 				if (finfo.hasSetFlag(FileInfo.SetFileSize)) {
-					sql.append(",");
+					// Update the file size
+
+					sql.append("size = ");
+					sql.append(finfo.getSize());
 				}
-				sql.append(" lastModified = ").append(finfo.getModifyDateTime());
-			}
+				// Check if the modify date/time has been set
 
-			// Trim any trailing comma
+				if (finfo.hasSetFlag(FileInfo.SetModifyDate)) {
+					// Add the SQL to update the modify date/time
+					if (finfo.hasSetFlag(FileInfo.SetFileSize)) {
+						sql.append(",");
+					}
+					sql.append(" lastModified = ").append(
+							finfo.getModifyDateTime());
+				}
 
-			if (sql.charAt(sql.length() - 1) == ',')
-				sql.setLength(sql.length() - 1);
-			// Complete the SQL request string
+				// Trim any trailing comma
 
-			sql.append(" WHERE id = ");
-			sql.append(fid);
-			sql.append(";");
+				if (sql.charAt(sql.length() - 1) == ',')
+					sql.setLength(sql.length() - 1);
+				// Complete the SQL request string
 
-			// Create the SQL statement
+				sql.append(" WHERE id = ");
+				sql.append(fid);
+				sql.append(";");
 
-			if (finfo.hasSetFlag(FileInfo.SetFileSize)
-					|| finfo.hasSetFlag(FileInfo.SetModifyDate)) {
-				// DEBUG
-				log4j.debug("[mySQL] Set file info SQL: " + sql.toString());
-				stmt.executeUpdate(sql.toString());
-			}
-		} catch (SQLException ex) {
+				// Create the SQL statement
 
-			// DEBUG
-
-			log4j.error("[mySQL] Set file information error " + ex.getMessage());
-
-			// Rethrow the exception
-
-			throw new DBException(ex.getMessage());
-		} finally {
-
-			// Close the statement
-
-			if (stmt != null) {
+				if (finfo.hasSetFlag(FileInfo.SetFileSize)
+						|| finfo.hasSetFlag(FileInfo.SetModifyDate)) {
+					// DEBUG
+					log4j.debug("[mySQL] Set file info SQL: " + sql.toString());
+					stmt.executeUpdate(sql.toString());
+				}
+				
+				conn.commit();
+			} catch (SQLException ex) {
 				try {
-					stmt.close();
-				} catch (Exception ex) {
+					if (conn != null) conn.rollback();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+				// DEBUG
+
+				log4j.error("[mySQL] Set file information error "
+						+ ex.getMessage());
+
+				// Rethrow the exception
+
+				throw new DBException(ex.getMessage());
+			} finally {
+
+				// Close the statement
+
+				if (stmt != null) {
+					try {
+						stmt.close();
+					} catch (Exception ex) {
+					}
+				}
+
+				// Release the database connection
+				if (conn != null) {
+					try {
+						conn.setAutoCommit(true);
+					} catch (SQLException e) {
+						e.printStackTrace();
+					}
+					releaseConnection(conn);
 				}
 			}
-
-			// Release the database connection
-
-			if (conn != null)
-				releaseConnection(conn);
-		}
 		}
 	}
 
@@ -2095,10 +2176,11 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			StreamInfo sinfo) throws DBException {
 
 		// Set file stream information fields
-		log4j.debug("DBI#setStreamInformation ; fid:" + fid + " , dirId:" + dirId + " ,sinfo:" + sinfo);
+		log4j.debug("DBI#setStreamInformation ; fid:" + fid + " , dirId:"
+				+ dirId + " ,sinfo:" + sinfo);
 		Connection conn = null;
 		Statement stmt = null;
-		
+
 		try {
 
 			// Get a connection to the database
@@ -2210,28 +2292,23 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	public int getFileId(int dirId, String fname, boolean dirOnly,
 			boolean caseLess, int userId, String shareName, String userName)
 			throws DBException {
-		String FileSysTableName = FileSysTable_COMMFILE;
-		String FileRevisionTableName = FileRevisionTable_COMMFILE;
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-			FileSysTableName = FileSysTable_MYFILE;
-			FileRevisionTableName = FileRevisionTable_MYFILE;
-		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-			FileSysTableName = FileSysTable_COMMFILE;
-			FileRevisionTableName = FileRevisionTable_COMMFILE;
-		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-		{
-			FileSysTableName = FileSysTable_SHAREFILE;
-			FileRevisionTableName = FileRevisionTable_SHAREFILE;
-		}
+		String FileSysTableName = getFileSysTableName(shareName);
 		// Get the file id for a file/folder
-//		log4j.debug("DBI#getFileId ,dirId:" + dirId + ", fname:" + fname + ", userId:" + userId + " , shareName:" + shareName);
+		log4j.debug("DBI#getFileId ,dirId:" + dirId + ", fname:" + fname +
+		 ", userId:" + userId + " , shareName:" + shareName);
 		int fileId = -1;
 
-		if (fname.equalsIgnoreCase(userName + DBUtil.SPECIAL_CHAR) && dirId <= 0) {
+		if (fname.equalsIgnoreCase(userName + DBUtil.SPECIAL_CHAR)
+				&& dirId <= 0) {
 			return 0;// 直接返回0
 		}
-		if(fname.equalsIgnoreCase(DBUtil.CLOUDURL) && dirId<=0)
-		{
+		// 最初结构是 "资料库/username@"
+		// 采用上面的规则，新版本目录结构改为“username@/资料库”,“username@/我的文件”
+		if (fname.equalsIgnoreCase(shareName) && dirId <= 0) {
+			return 0;// 直接返回0 (避免递归到根目录假目录时返回-1错误)
+		}
+
+		if (fname.equalsIgnoreCase(DBUtil.CLOUDURL) && dirId <= 0) {
 			log4j.debug("[mySQL] -99: 加载文件云ID.url");
 			fileId = -99;
 			return -99;
@@ -2252,15 +2329,23 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			sql.append("SELECT id,lastModified,status FROM ");
 			sql.append(FileSysTableName);
 			sql.append(" WHERE status>=0 "); // status>=0 注意。后面要替换为 status=-1 查询
-			if (fname.equalsIgnoreCase(userName + DBUtil.SPECIAL_CHAR)) {
+			// if (fname.equalsIgnoreCase(userName + DBUtil.SPECIAL_CHAR)) {
+			if (fname.equalsIgnoreCase(userName + DBUtil.SPECIAL_CHAR)
+					|| (fname.equalsIgnoreCase(shareName) && dirId <= 0)) {
 				sql.append(" AND pid = 0");
 			} else {
 				sql.append(" AND pid = ").append(dirId);
 			}
-			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-
-			} else {
-				sql.append(" AND userId=").append(userId);
+			// if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE) ||
+			// shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) ||
+			// shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			//
+			// } else {
+			// sql.append(" AND userId=").append(userId);
+			// }
+			// 修改增加userid查询条件的判断
+			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+				sql.append(" AND userId = ").append(userId);// 我的文件才需要加userId,测试发现　shareName　可能会为空
 			}
 			// Check if the search is for a directory only
 			if (dirOnly == true) {
@@ -2272,50 +2357,58 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			// Check if the file name search should be caseles
 			if (caseLess == true) {
 				// Perform a caseless search
-				sql.append(" AND lower(name) = LOWER('");
+				sql.append(" AND name = '");
 				sql.append(checkNameForSpecialChars(fname));
-				sql.append("')");
+				sql.append("'");
 			} else {
-				sql.append(" AND lower(name) = LOWER('");
+				sql.append(" AND name = '");
 				sql.append(checkNameForSpecialChars(fname));
-				sql.append("')");
+				sql.append("'");
 			}
 			sql.append(" ORDER BY revision DESC,id ASC");
 			// DEBUG
 			// sql.append(" ORDER BY revision DESC ");//不考虑目录重复的问题(目录重复为非正常文件)不排序，提高效率
 			log4j.debug("[mySQL] Get file id SQL: " + sql.toString());
-
+			
 			// Run the database search
-
+			
 			ResultSet rs = stmt.executeQuery(sql.toString());
 			// Check if a file record exists
 			if (rs.next()) {
 				// Get the unique file id for the file or folder
 				fileId = rs.getInt("id");
-			} else if(!fname.startsWith("~$")) {
-				if (!fname.equalsIgnoreCase("desktop.ini")
-						&& !fname.equalsIgnoreCase("Thumbs.db")
-						&& !fname.equalsIgnoreCase("folder.jpg")
-						&& !fname.equalsIgnoreCase("folder.gif")
-						&& !fname.equalsIgnoreCase(".lfs")) {
-					// 取3秒内删除的同名的文件的id
-					log4j.debug("[mySQL] del sql SQL: " + sql.toString().replace("status>=0", "status>=-1"));
-					rs = stmt.executeQuery(sql.toString().replace("status>=0", "status>=-1"));// 查询删除的
-					if (rs.next()) {
-						long lastTime = rs.getLong("lastModified");
-						int status = rs.getInt("status");
-						if (status >= 0 || System.currentTimeMillis() - lastTime <= delFileKeepTime) {
-							fileId = rs.getInt("id");// 删除3秒内的文件，表示存在,直接返回id
-						} else {
-							log4j.warn("DBI#getFileId  fname:" + fname + " 已经存在一个status=-1 的 ，但存在时间已经超过: " + (System.currentTimeMillis() - lastTime) + "ms");
-						}
-					}
-				}
+//			} else if (!fname.startsWith("~$")) {
+//				if (!fname.equalsIgnoreCase("desktop.ini")
+//						&& !fname.equalsIgnoreCase("Thumbs.db")
+//						&& !fname.equalsIgnoreCase("folder.jpg")
+//						&& !fname.equalsIgnoreCase("folder.gif")
+//						&& !fname.equalsIgnoreCase(".lfs")) {
+//					// 取3秒内删除的同名的文件的id
+//					log4j.debug("[mySQL] del sql SQL: "
+//							+ sql.toString().replace("status>=0", "status>=-1"));
+//					rs = stmt.executeQuery(sql.toString().replace("status>=0",
+//							"status>=-1"));// 查询删除的
+//					if (rs.next()) {
+//						long lastTime = rs.getLong("lastModified");
+//						int status = rs.getInt("status");
+//						if (status >= 0
+//								|| System.currentTimeMillis() - lastTime <= delFileKeepTime) {
+//							fileId = rs.getInt("id");// 删除3秒内的文件，表示存在,直接返回id
+//						} else {
+//							log4j.warn("DBI#getFileId  fname:" + fname
+//									+ " 已经存在一个status=-1 的 ，但存在时间已经超过: "
+//									+ (System.currentTimeMillis() - lastTime)
+//									+ "ms");
+//						}
+//					}
+//				}
 			}
 			// Close the result set
 			rs.close();
 			if (fileId <= 0) {
-				log4j.warn("not fond fileId ; fileId:" + fileId + " , dirId:" + dirId + ", fname:" + fname + ", userId:" + userId + " , shareName:" + shareName);
+				log4j.info("not fond fileId ; fileId:" + fileId + " , dirId:"
+						+ dirId + ", fname:" + fname + ", userId:" + userId
+						+ " , shareName:" + shareName);
 			}
 		} catch (Exception ex) {
 			// DEBUG
@@ -2353,21 +2446,11 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 */
 	public DBFileInfo getFileInformation(int dirId, int fid, int infoLevel,
 			int userId, String shareName, String userName) throws DBException {
-		String FileSysTableName = FileSysTable_COMMFILE;
-		String FileRevisionTableName = FileRevisionTable_COMMFILE;
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-			FileSysTableName = FileSysTable_MYFILE;
-			FileRevisionTableName = FileRevisionTable_MYFILE;
-		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-			FileSysTableName = FileSysTable_COMMFILE;
-			FileRevisionTableName = FileRevisionTable_COMMFILE;
-		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-		{
-			FileSysTableName = FileSysTable_SHAREFILE;
-			FileRevisionTableName = FileRevisionTable_SHAREFILE;
-		}
+		String FileSysTableName = getFileSysTableName(shareName);
+		String FileRevisionTableName = getRevisionTableName(shareName);
 		// Create a SQL SELECT for the required file information
-//		log4j.debug("DBI#getFileInformation ,dirId:" + dirId + ", fid:" + fid + ", userId:" + userId + " , shareName:" + shareName);
+		log4j.debug("DBI#getFileInformation ,dirId:" + dirId + ", fid:" + fid
+				+ ", userId:" + userId + " , shareName:" + shareName);
 		Connection conn = null;
 		Statement stmt = null;
 		try {
@@ -2376,20 +2459,21 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		} catch (Exception e) {
 			throw new DBException("Get Dbconnection Failed...");
 		}
-		if(fid==-99)
-		{
+		if (fid == -99) {
 			log4j.debug("[mySQL] -99: 加载文件云.url");
 			DBFileInfo finfo = new DBFileInfo();
+			java.util.Date nowDate = new java.util.Date();
+			finfo.setInfoLastModifyTime(nowDate.getTime());
 			finfo.setFileName(DBUtil.CLOUDURL);
 			finfo.setDirectoryId(dirId);
-			try{
-				//重设置大小
+			try {
+				// 重设置大小
 				finfo.setFileId(-99);
-				finfo.setSize(DBUtil.getURLMYFILE_TXT(getBaseUrl(conn),userId).getBytes().length);
-			}catch(Exception e)
-			{
+				finfo.setSize(DBUtil.getURLMYFILE_TXT(getBaseUrl(conn), userId)
+						.getBytes().length);
+			} catch (Exception e) {
 			}
-			finfo.setFileType(FileType.RegularFile);				
+			finfo.setFileType(FileType.RegularFile);
 			int attr = 0;
 			attr += FileAttribute.ReadOnly;// 只读权限
 			finfo.setFileAttributes(attr);
@@ -2401,7 +2485,14 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		if (fid == 0) {
 			// Load the file record
 			DBFileInfo finfo = new DBFileInfo();
-			finfo.setFileName(userName);
+			java.util.Date nowDate = new java.util.Date();
+			finfo.setInfoLastModifyTime(nowDate.getTime());
+			if(StringUtil.isEmpty(shareName)||"*".equals(shareName))
+			{
+				finfo.setFileName(userName);	
+			}else{
+				finfo.setFileName(shareName);
+			}			
 			finfo.setDirectoryId(dirId);
 			finfo.setSize(0);
 			finfo.setFileId(fid);
@@ -2409,7 +2500,9 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			int attr = 0;
 			attr += FileAttribute.Directory;
 			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE)
-					|| shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+					|| shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE)
+					|| shareName
+							.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
 				attr += FileAttribute.ReadOnly;
 			}
 			finfo.setFileAttributes(attr);
@@ -2435,14 +2528,14 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 		// All file information
 		case DBInterface.FileAll:
-			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE)) {
-				sql.append("id,pid,name,size,add_time,lastModified,isFile,userId,permissions");
-			}
-			else if(shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE)||shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS))
-			{
+			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+				sql.append("id,pid,name,size,add_time,lastModified,isFile,userId");
+			} else if (isCommonShare(shareName)) {
 				sql.append("id,pid,name,size,add_time,lastModified,isFile,userId,permissionsFileId,islock,lockedByUser");
-			}
-			else {
+			} else if (shareName.equals(DBUtil.SHARENAME_RECIVEFILE)) {
+				sql.append("id,pid,name,size,add_time,lastModified,isFile,userId,permissions");
+			} else {
+
 				sql.append("id,pid,name,size,add_time,lastModified,isFile,userId");
 			}
 			break;
@@ -2456,20 +2549,25 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		sql.append(FileSysTableName);
 		sql.append(" WHERE id = ");
 		sql.append(fid);
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-
-		} else {
-			sql.append(" AND userId = ").append(userId);
+		// if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE) ||
+		// shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) ||
+		// shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+		//
+		// } else {
+		// sql.append(" AND userId = ").append(userId);
+		// }
+		// 修改增加userid查询条件的判断
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			sql.append(" AND userId = ").append(userId);// 我的文件才需要加userId,测试发现　shareName　可能会为空
 		}
 		// sql.append(" ORDER BY revision DESC");//返回单个文件，不排序（如果有重复记录说明数据有问题）
 
 		// Load the file record
 		DBFileInfo finfo = null;
-		
+
 		try {
 
 			// Get a connection to the database
-		
 
 			// DEBUG
 			log4j.debug("[mySQL] Get file info SQL: " + sql.toString());
@@ -2481,6 +2579,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				finfo = new DBFileInfo();
 				finfo.setFileId(fid);
 				finfo.setFileAttributes(0);
+				java.util.Date nowDate = new java.util.Date();
+				finfo.setInfoLastModifyTime(nowDate.getTime());
 
 				// Load the file information
 
@@ -2510,15 +2610,12 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 					// Load the various file date/times
 					Timestamp ts = rs.getTimestamp("add_time");
 					finfo.setModifyDateTime(rs.getLong("lastModified"));
-					if(null != ts &&  ts.getTime()>0)
-					{
+					if (null != ts && ts.getTime() > 0) {
 						finfo.setCreationDateTime(ts.getTime());
-//						finfo.setModifyDateTime(ts.getTime());
-//						finfo.setChangeDateTime(ts.getTime());
+						// finfo.setModifyDateTime(ts.getTime());
+						// finfo.setChangeDateTime(ts.getTime());
 						finfo.setChangeDateTime(rs.getLong("lastModified"));
-					}
-					else
-					{
+					} else {
 						finfo.setCreationDateTime(rs.getLong("lastModified"));
 						finfo.setChangeDateTime(rs.getLong("lastModified"));
 					}
@@ -2528,7 +2625,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 					// Build the file attributes flags
 
 					int attr = 0;
-					
+
 					// if ( rs.getBoolean("ReadOnly") == true)
 					// attr += FileAttribute.ReadOnly;
 
@@ -2540,14 +2637,13 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 					if (rs.getBoolean("isFile") == true) {
 						finfo.setFileType(FileType.RegularFile);
-					} else
+					} else {
 						attr += FileAttribute.Directory;
-					finfo.setFileType(FileType.Directory);
+						finfo.setFileType(FileType.Directory);
+					}
 
 					// if ( rs.getBoolean("Archived") == true)
 					// attr += FileAttribute.Archive;
-
-					
 
 					// finfo.setGid(rs.getInt("Gid"));
 					finfo.setUid(rs.getInt("userId"));
@@ -2562,34 +2658,77 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 							// 只读权限
 							attr += FileAttribute.ReadOnly;
 						}
-					}
-					else if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+					} else if (shareName
+							.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE)
+							|| shareName
+									.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
 						// 公共资料库权限设值
 						UserBean user = this.getUserByUsername(userName);
 						boolean isSuperAdmin = false;
 						boolean isFileAdmin = false;
 						boolean islock = rs.getBoolean("islock");
 						int lockedByUser = rs.getInt("lockedByUser");
-						if(islock && lockedByUser!=userId)
-						{
-							//被锁定（且非自己锁定）的文件只读
-							attr += FileAttribute.ReadOnly;
+						
+						if (shareName.equals("")) {
+							shareName = DBUtil.SHARENAME_COMMFILE;
 						}
-						if(null !=user && user.getRoleId()==1)
-						{
+						
+						int fileId = finfo.getFileId();
+						
+						
+						String ext = DiskUtil.getExt(finfo.getFileName());
+						if (DBUtil.SUPPORT_EXT.contains(ext) && !ext.equals("txt")) {
+							String sqlss = "SELECT id, fileId FROM "
+									+ FileRevisionTableName
+									+ " WHERE status>=-1" 
+									//+ " AND name =  '" + this.fileRenamed 
+									+ " AND baseFileId = " + (fileId)
+									+ " ORDER BY revision DESC,id DESC limit 1";// 只查有效的版本
+							
+							long rfileId = 0;
+							log4j.debug("[mySQL] Load file data SQL: " + sqlss);
+							rs = stmt.executeQuery(sqlss);
+							if (rs.next()) {
+								rfileId = rs.getLong("fileId");
+								String sql2 = "SELECT islock,lockedByUser FROM "
+								+ FileSysTableName
+								+ " WHERE status>=-1 AND id = " + (rfileId) 
+								+ " ORDER BY revision DESC limit 1";// 只查有效的版本
+								
+								ResultSet rs2 = stmt.executeQuery(sql2);
+								if (rs2.next()) {
+									islock = rs2.getBoolean("islock");
+									lockedByUser = rs2.getInt("lockedByUser");
+								}
+							}
+							rs.close();
+						}
+						
+						if (islock && lockedByUser != userId) {
+							// 被锁定（且非自己锁定）的文件只读
+							attr += FileAttribute.ReadOnly;//	TODO
+							finfo.setLocked(islock);
+						}
+						if (null != user && user.getRoleId() == 1) {
 							isSuperAdmin = true;
-						}
-						else
-						{
+						} else {
 							// 查询是否为库管理员
 							if (dirId > 0) {
-								String auditorSql = "SELECT auditorId FROM "+FileSysTableName+" WHERE id=(SELECT pid1 FROM "+ FileSysTableName+" WHERE id=" + fid + ")";
+								String auditorSql = "SELECT auditorId FROM "
+										+ FileSysTableName
+										+ " WHERE id=(SELECT pid1 FROM "
+										+ FileSysTableName + " WHERE id=" + fid
+										+ ")";
 								try {
-									log4j.debug("[mySQL] auditorSql  SQL: " + auditorSql);
-									ResultSet rs2 = stmt.executeQuery(auditorSql);
+									log4j.debug("[mySQL] auditorSql  SQL: "
+											+ auditorSql);
+									ResultSet rs2 = stmt
+											.executeQuery(auditorSql);
 									String auditorId = "";
 									while (rs2.next()) {
-										auditorId = "," + rs2.getString("auditorId") + ",";
+										auditorId = ","
+												+ rs2.getString("auditorId")
+												+ ",";
 									}
 									rs2.close();
 									if (auditorId.contains("," + userId + ",")) {
@@ -2600,33 +2739,39 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 								}
 							}
 						}
-						if(isSuperAdmin==false && isFileAdmin==false)
-						{
+						if (isSuperAdmin == false && isFileAdmin == false) {
 							long parentPermFileId = 0;
-							String groupIds = this.getGroupIdsByUserid(userId,conn);
-							String departmentPath = this.getDepartmentPathById(user.getDepartmentId(),conn);	
-							
-							String PathSql = "SELECT permissionsFileId FROM "+ FileSysTableName+" WHERE id =" + fid;
+							String groupIds = this.getGroupIdsByUserid(userId,
+									conn);
+							String departmentPath = this.getDepartmentPathById(
+									user.getDepartmentId(), conn);
+
+							String PathSql = "SELECT permissionsFileId FROM "
+									+ FileSysTableName + " WHERE id =" + fid;
 							log4j.debug("[mySQL] PathSql SQL:" + PathSql);
 							ResultSet pathRs = stmt.executeQuery(PathSql);
 							if (pathRs.next()) {
-								parentPermFileId = pathRs.getInt("permissionsFileId");
+								parentPermFileId = pathRs
+										.getInt("permissionsFileId");
 							}
-							if(parentPermFileId<=0)
-							{
-								PathSql = "SELECT permissionsFileId FROM "+ FileSysTableName+" WHERE id =" + dirId;
+							if (parentPermFileId <= 0) {
+								PathSql = "SELECT permissionsFileId FROM "
+										+ FileSysTableName + " WHERE id ="
+										+ dirId;
 								log4j.debug("[mySQL] PathSql SQL:" + PathSql);
 								pathRs = stmt.executeQuery(PathSql);
 								if (pathRs.next()) {
-									parentPermFileId = pathRs.getInt("permissionsFileId");
+									parentPermFileId = pathRs
+											.getInt("permissionsFileId");
 								}
 							}
 							pathRs.close();
-							if(dirId>0)
-							{
-								String parentPermissions = this.filePermissions(parentPermFileId, userId, groupIds, departmentPath,conn);//重新获得权限
-								if(parentPermissions.contains("w")==false)
-								{
+							if (dirId > 0) {
+								String parentPermissions = this
+										.filePermissions(parentPermFileId,
+												userId, groupIds,
+												departmentPath, conn);// 重新获得权限
+								if (parentPermissions.contains("w") == false) {
 									// 只读权限
 									attr += FileAttribute.ReadOnly;
 								}
@@ -2634,18 +2779,20 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 						}
 					}
 					finfo.setFileAttributes(attr);
-					if(!finfo.isDirectory() && finfo.getSize()==0)
-					{
-						//大小为0，重新从版本中获得大小
-						sql = new StringBuffer();
-						sql.append("SELECT size FROM ").append(FileRevisionTableName).append(" WHERE status>=0 AND fileId=").append(finfo.getFileId());
-						sql.append(" ORDER BY revision DESC,id DESC");
-						rs = stmt.executeQuery(sql.toString());
-						if(rs.next())
-						{
-							finfo.setSize(rs.getLong("size"));
-							log4j.debug("重新获得"+finfo.getFileId()+"的size值："+finfo.getSize());
-						}
+					if (!finfo.isDirectory() && finfo.getSize() == 0) {
+						// 大小为0，重新从版本中获得大小
+//						sql = new StringBuffer();
+//						sql.append("SELECT size FROM ")
+//								.append(FileRevisionTableName)
+//								.append(" WHERE status>=0 AND fileId=")
+//								.append(finfo.getFileId());
+//						sql.append(" ORDER BY revision DESC,id DESC");
+//						rs = stmt.executeQuery(sql.toString());
+//						if (rs.next()) {
+//							finfo.setSize(rs.getLong("size"));
+//							log4j.debug("重新获得" + finfo.getFileId() + "的size值："
+//									+ finfo.getSize());
+//						}
 					}
 					// Get the group/owner id
 					// finfo.setMode(rs.getInt("Mode"));
@@ -2664,7 +2811,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		} catch (Exception ex) {
 
 			// DEBUG
-			log4j.error("[mySQL] Get file information error "+ ex.getMessage());
+			log4j.error("[mySQL] Get file information error " + ex.getMessage());
 
 			// Rethrow the exception
 
@@ -2968,9 +3115,149 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 		return sList;
 	}
-
+	
 	/**
-	 * Rename a file or folder, may also change the parent directory.
+	 * Rename a folder, may also change the parent directory.
+	 * 
+	 * //重命名目录
+	 * 
+	 * @param newDirId
+	 *            int
+	 * @param fid
+	 *            int
+	 * @param newName
+	 *            String
+	 * @param ipAddress 
+	 * @param newDir
+	 *            int
+	 * @exception DBException
+	 * @exception FileNotFoundException
+	 * 
+	 * 
+	 *                docx 文件打开时不会调用这个方法， 保存时候会！
+	 * @throws FileExistsException 
+	 * 
+	 */
+	public synchronized long renameFolderRecord(long newDirId, long oldDirId, long fId, int userId, String newName,
+			String shareName, String ipAddress) throws DBException, FileNotFoundException, FileExistsException {
+		
+		newName = checkNameForSpecialChars(newName);
+		String FileSysTableName = getFileSysTableName(shareName);
+		String FileRevisionTableName = getRevisionTableName(shareName);
+			
+			CallableStatement proc = null;
+			ResultSet rRs = null;
+			Connection conn = null;
+			Statement stmt = null;
+			try {
+				conn = getConnection();
+				stmt = conn.createStatement();
+				
+				String zz = "SELECT 1 FROM "
+						+ FileSysTableName
+						+ " WHERE pid = "
+						+ newDirId
+						+ " and name = '" + newName
+						+ "' and status >=0 ";
+
+				rRs = stmt.executeQuery(zz);
+				if (rRs.next()) {
+					log4j.error("File exists, " + newName);
+					throw new FileExistsException("File exists, " + newName);
+				}
+				
+				String procedure = "";
+				if (isCommonShare(shareName)) {
+					
+					if (oldDirId > 0) { // 此处对应的是剪切 	资料库根目录下不可以剪切
+						procedure = "nasCommShearcut";
+						proc = conn.prepareCall("{ call nasCommShearcut(?, ?, ?, ?) }");
+						proc.setLong(1, newDirId);
+						proc.setLong(2, oldDirId);
+						proc.setLong(3, fId);
+						proc.setLong(4, userId);
+						
+
+						
+						String logDesc = "CIFS移动(或剪切)文件或文件夹";
+						this.UpLog(userId, newDirId, (int) fId,
+								0, new java.util.Date(),
+								logDesc,"m",ipAddress,
+								FileRevisionTableName,
+								FileSysTableName, conn);
+						
+						
+					} else { // 此处对应的是直接重命名	
+						procedure = "nasCommFolderRename";
+						proc = conn.prepareCall("{ call nasCommFolderRename(?, ?) }");
+						proc.setLong(1, fId);
+						proc.setString(2, newName);
+						
+
+						
+						String logDesc = "CIFS重命名文件夹";
+						this.UpLog(userId, newDirId, (int) fId,
+								0, new java.util.Date(),
+								logDesc,"n",ipAddress,
+								FileRevisionTableName,
+								FileSysTableName, conn);
+					}
+					
+				} else if(shareName.equals(DBUtil.SHARENAME_USERFILE)) {
+
+					if (oldDirId > -1) { // 此处对应的是剪切	个人文件根目录下可以剪切
+						procedure = "nasUserShearcut";
+						proc = conn.prepareCall("{ call nasUserShearcut(?, ?, ?, ?) }");
+						proc.setLong(1, newDirId);
+						proc.setLong(2, oldDirId);
+						proc.setLong(3, fId);
+						proc.setLong(4, userId);
+
+						String logDesc = "CIFS移动(或剪切)文件或文件夹";
+						this.UpLog(userId, newDirId, (int) fId,
+								0, new java.util.Date(),
+								logDesc,"m",ipAddress,
+								FileRevisionTableName,
+								FileSysTableName, conn);
+					} else {
+						procedure = "nasUserFolderRename";
+						proc = conn.prepareCall("{ call nasUserFolderRename(?, ?, ?) }");
+						proc.setLong(1, fId);
+						proc.setString(2, newName);
+						proc.setInt(3, userId);
+
+						String logDesc = "CIFS重命名文件夹";
+						this.UpLog(userId, newDirId, (int) fId,
+								0, new java.util.Date(),
+								logDesc,"n",ipAddress,
+								FileRevisionTableName,
+								FileSysTableName, conn);
+					}
+				}
+				proc.execute();
+			} catch (SQLException e) {
+				e.printStackTrace();
+				log4j.error("[mySQL] RenameFolder :" + e.getStackTrace());
+				throw new DBException(e.getMessage());
+			} finally {
+				try { 
+					if (proc != null) {
+						proc.close();
+					}
+					if (conn != null) {
+						conn.close();
+					}
+				}
+				catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+			
+			return fId;
+	}
+	
+	/**
+	 * Rename a file, may also change the parent directory.
 	 * 
 	 * @param dirId
 	 *            int
@@ -2980,219 +3267,58 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 *            String
 	 * @param newDir
 	 *            int
+	 * @param ipAddress 
 	 * @exception DBException
 	 * @exception FileNotFoundException
+	 * 
+	 * 
+	 *                docx 文件打开时不会调用这个方法， 保存时候会！
+	 * @throws FileExistsException 
+	 * 
 	 */
-	public int renameFileRecord(int dirId, int fid, String newName, int newDir,String shareName)
-			throws DBException, FileNotFoundException {
-		// Rename a file/folder
-		Connection conn = null;
-		Statement stmt = null;
-		log4j.debug("DBI#renameFileRecord ; time:" + System.currentTimeMillis()
-				+ ", fileId:" + fid + ", newName:" + newName + ", newDir:"
-				+ newDir);
-		String FileSysTableName = FileSysTable_COMMFILE;
-		String FileRevisionTableName = FileRevisionTable_COMMFILE;
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-			FileSysTableName = FileSysTable_MYFILE;
-			FileRevisionTableName = FileRevisionTable_MYFILE;
-		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-			FileSysTableName = FileSysTable_COMMFILE;
-			FileRevisionTableName = FileRevisionTable_COMMFILE;
-		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-		{
-			FileSysTableName = FileSysTable_SHAREFILE;
-			FileRevisionTableName = FileRevisionTable_SHAREFILE;
-		}
-		try {
-			synchronized (this)// 暂时改为同步。 避免产生重复文件
-			{
-				// //因DBI#deleteFileRecord ; DBI#renameFileRecord 时间间隔太短，延时100ms
-				// 再执行改名操作
-				// Get a connection to the database
-				conn = getConnection();
-				stmt = conn.createStatement();
-				// Update the file record
-
-				String findOldSql = "SELECT id,revision,revisionCount,lastModified,status FROM " + FileSysTableName
-						+ " WHERE status>=0 AND pid=" + newDir + " AND LOWER(name) = LOWER('" + checkNameForSpecialChars(newName) + "') ORDER BY revision DESC,id ASC";
-				log4j.debug("[mySQL] findOldSql SQL: " + findOldSql);
-				ResultSet rRs = stmt.executeQuery(findOldSql);
-				long existFid = 0;
-				int existStatus = 0;
-				long revisionCount = 1;
-				if (rRs.next()) {
-					existFid = rRs.getLong("id");
-					revisionCount = rRs.getLong("revisionCount");
-					existStatus = rRs.getInt("status");
-				} else {
-					findOldSql = "SELECT id,revision,revisionCount,lastModified,status FROM " + FileSysTableName
-							+ " WHERE status >=-1 AND pid="+ newDir+ " AND LOWER(name) = LOWER('"+ checkNameForSpecialChars(newName)+ "') ORDER BY revision DESC,id ASC";
-					log4j.debug("[mySQL] del findOldSql SQL: " + findOldSql);
-					rRs = stmt.executeQuery(findOldSql);
-					if (rRs.next()) {
-						// 删除不超过10秒(10000ms)也表示存在
-						long lastTime = rRs.getLong("lastModified");
-						existStatus = rRs.getInt("status");
-						if (existStatus >= 0 || System.currentTimeMillis() - lastTime <= delFileKeepTime) {
-							existFid = rRs.getLong("id");
-							revisionCount = rRs.getLong("revisionCount");
-						} else {
-							log4j.debug("存在已经删除的记录，但已经超过10秒; fileId:" + rRs.getLong("id"));
-						}
-					}
-				}
-				rRs.close();
-				if (existFid > 0 && existFid != fid) {
-					// 改名重复的情况
-					revisionCount = revisionCount + 1;
-					long revision = 0;// 当前这个文件的版本
-					// long size = 0;
-					// String md5 = "md5";
-					findOldSql = "SELECT revision,size,md5,status FROM " + FileSysTableName + " WHERE id=" + fid;
-					log4j.debug("[mySQL] findOldSql SQL: " + findOldSql);
-					rRs = stmt.executeQuery(findOldSql);
-					if (rRs.next()) {
-						revision = rRs.getLong("revision");
-						// size = rRs.getLong("size");
-						// md5 = rRs.getString("md5");
-					}
-					rRs.close();
-
-					// 已经存在同名的文件，将旧文件作为当前文件的新版本。不插入重新值
-
-//					String rRevisionSql = "UPDATE " + getFileRevisionTable()
-//							+ " SET fileId=" + existFid + ",revisionCount=" + revisionCount + ",name = '" + checkNameForSpecialChars(newName) + "', lastModified = " + System.currentTimeMillis()
-//							+ " WHERE fileId = " + fid;
-					String rOldRevisionSql =  "UPDATE " + FileRevisionTableName + " SET revisionCount=" + revisionCount + ",name = '" + checkNameForSpecialChars(newName) + "', lastModified = " + System.currentTimeMillis()+ " WHERE fileId = " + fid;
-					stmt.executeUpdate(rOldRevisionSql);//改旧的版本文件名
-					
-					String rRevisionSql ="INSERT INTO "+FileRevisionTableName+" (fileid,name,tags,md5,size,lastModified,userId,revision,revisionCount,status,rollPath,storePath)" +
-							" SELECT "+existFid+" AS fileid, '"+checkNameForSpecialChars(newName)+"' AS name,tags,md5,size,lastModified,userId,revision,revisionCount, status,rollPath,storePath from "+FileRevisionTableName+" WHERE fileId = " + fid;
-					
-					String renameFileSql = "UPDATE " + FileSysTableName + " SET status=-2,name = '" + checkNameForSpecialChars(newName)
-							+ "',revisionCount=" + revisionCount + ",pid=" + newDir + ",lastModified = " + System.currentTimeMillis() + " WHERE id = " + fid;// 改名并删除
-					
-					String updateFileSql = "UPDATE " + FileSysTableName
-					+ " SET status=4,revision=" + revision + ",revisionCount=" + revisionCount + ",pid=" + newDir + ",lastModified = " + System.currentTimeMillis()
-					+ " WHERE id = " + existFid;
-					log4j.debug("[mySQL] Rename Revion1  SQL: " + rRevisionSql);
-					if (stmt.executeUpdate(rRevisionSql) == 0) {// 文件版本改名
-						log4j.error("DBI#renameFileRecord  修改新版本对应的旧文件id失败! fid:" + fid + " ,existFid:" + existFid);
-					}
-					log4j.debug("[mySQL] Rename SQL: " + renameFileSql.toString());
-					// Rename the file/folder
-					if (stmt.executeUpdate(renameFileSql) == 0) {// 文件改名
-						// Original file not found
-						log4j.error("DBI#renameFileRecord 修改当前文件名称失败，FileNotFoundException  fid:" + fid);
-						throw new FileNotFoundException("" + fid);
-					}
-					log4j.debug("[mySQL] updateFileSql SQL: " + updateFileSql);
-					if (stmt.executeUpdate(updateFileSql) == 0) {// 文件版本改名
-						log4j.error("DBI#renameFileRecord  修改旧文件版本等属性失败! fid:" + fid + " ,existFid:" + existFid);
-					}
-
-//					String upSql = "UPDATE " + getFileSysTableName() + " SET status=0,revisionCount=" + revisionCount + ",lastModified=" + System.currentTimeMillis() + " WHERE status<0 AND id=" + existFid;
-//					log4j.debug("[mySQL] 更新文件状态 SQL:" + upSql);
-//					stmt.executeUpdate(upSql);
-					
-					fid = (int) existFid;
-				} else {
-					// 改名不重复
-					String renameFileSql = "UPDATE " + FileSysTableName + " SET name = '"
-							+ checkNameForSpecialChars(newName) + "', pid = " + newDir + ", lastModified = " + System.currentTimeMillis() + " WHERE id = " + fid;
-					String renameRevisionSql = "UPDATE " 	+FileRevisionTableName + " SET name = '" + checkNameForSpecialChars(newName)
-							+ "', lastModified = " + System.currentTimeMillis() + " WHERE fileId = " + fid;
-
-					log4j.debug("[mySQL] Rename SQL: " + renameFileSql.toString());
-					// Rename the file/folder
-					if (stmt.executeUpdate(renameFileSql) == 0) {// 文件改名
-						// Original file not found
-						log4j.error("DBI#renameFileRecord FileNotFoundException , fid:" + fid);
-						throw new FileNotFoundException("" + fid);
-					}
-//					String maxRevisionSql = "SELECT MAX(id) as id FROM " + getFileRevisionTable() + " WHERE fileId=" + fid;
-					String  maxRevisionSql = "SELECT MAX(revision) as revision FROM " + FileRevisionTableName + " WHERE fileId=" + fid;
-					long maxRevision = 0;
-					log4j.debug("[mySQL] maxRevisionSql SQL: " + maxRevisionSql);
-					rRs = stmt.executeQuery(maxRevisionSql);
-					if (rRs.next()) {
-						maxRevision = rRs.getInt("revision");
-					}
-					rRs.close();
-					if (maxRevision > 0) {
-						renameRevisionSql += " AND revision=" + maxRevision;// 只改最后一个版本的名称。前面的版本的名称不能变，要保留
-					}
-					log4j.debug("[mySQL] Rename Revision  SQL: " + renameRevisionSql.toString());
-					if (stmt.executeUpdate(renameRevisionSql) == 0) {// 文件版本改名
-						log4j .error("DBI#renameFileRecord 修改当前文件版本名称失败! fileId=" + fid);
-					}
-				}
-			}
-		} catch (SQLException ex) {
-			// DEBUG
-			log4j.error("[mySQL] Rename file error " + ex.getMessage());
-			// Rethrow the exception
-			throw new DBException(ex.getMessage());
-		} finally {
-
-			// Close the statement
-			if (stmt != null) {
-				try {
-					stmt.close();
-				} catch (Exception ex) {
-				}
-			}
-			// Release the database connection
-			if (conn != null)
-				releaseConnection(conn);
-		}
+	public synchronized int renameFileRecord(int dirId, int fid, String newName, int newDir,
+			String shareName, String ipAddress) throws DBException, FileNotFoundException, FileExistsException {
 
 		return fid;
 	}
-	
+
 	/**
 	 * 修改未完成上传的文件的临时地址
+	 * 
+	 * --- 这个方法， 经观察， 是几乎无用的， update语句一次都没有成功！
 	 */
-	public void modifyFileTemporaryFile(int fid, FileSegmentInfo fileSegInfo,String shareName) throws DBException{
+	public void modifyFileTemporaryFile(int fid, FileSegmentInfo fileSegInfo,
+			String shareName) throws DBException {
 		// Rename a file/folder
 		Connection conn = null;
 		Statement stmt = null;
-		String FileSysTableName = FileSysTable_COMMFILE;
-		String FileRevisionTableName = FileRevisionTable_COMMFILE;
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-			FileSysTableName = FileSysTable_MYFILE;
-			FileRevisionTableName = FileRevisionTable_MYFILE;
-		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-			FileSysTableName = FileSysTable_COMMFILE;
-			FileRevisionTableName = FileRevisionTable_COMMFILE;
-		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-		{
-			FileSysTableName = FileSysTable_SHAREFILE;
-			FileRevisionTableName = FileRevisionTable_SHAREFILE;
-		}
-		if(null !=fileSegInfo)
-		{
-			log4j.debug("DBI#modifyFileTemporaryFile ; time:" + System.currentTimeMillis()
-					+ ", fileId:" + fid + ", temporaryFile:" + fileSegInfo.getTemporaryFile());
+		String FileSysTableName = getFileSysTableName(shareName);
+		String FileRevisionTableName = getRevisionTableName(shareName);
+		if (null != fileSegInfo) {
+			log4j.debug("DBI#modifyFileTemporaryFile ; time:"
+					+ System.currentTimeMillis() + ", fileId:" + fid
+					+ ", temporaryFile:" + fileSegInfo.getTemporaryFile());
 			try {
 				synchronized (this)// 暂时改为同步。 避免产生重复文件
 				{
-					// //因DBI#deleteFileRecord ; DBI#renameFileRecord 时间间隔太短，延时100ms
+					// //因DBI#deleteFileRecord ; DBI#renameFileRecord
+					// 时间间隔太短，延时100ms
 					// 再执行改名操作
 					// Get a connection to the database
 					conn = getConnection();
 					stmt = conn.createStatement();
-					
-					String sql = "SELECT id,storePath,rollPath,lastModified,size FROM "
-						+ FileRevisionTableName
-						+ " WHERE status>=0 AND fileId = "
-						+ fid + " ORDER BY revision DESC,id DESC";// 只查有效的版本
 
-//					String rollPath = null;
+					String sql = "SELECT id,storePath,rollPath,lastModified,size FROM "
+							+ FileRevisionTableName
+							+ " WHERE status>=0 AND fileId = "
+							+ fid
+							+ " ORDER BY revision DESC,id DESC";// 只查有效的版本
+
+					// String rollPath = null;
 					String storePath = null;
 					long revisionId = 0;
-					// Find the data fragments for the file, check if the file is stored
+					// Find the data fragments for the file, check if the file
+					// is stored
 					// in a Jar
 					log4j.debug("[mySQL] Load modify data SQL: " + sql);
 					ResultSet rs = stmt.executeQuery(sql);
@@ -3201,45 +3327,59 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 					if (rs.next()) {
 						// Access the file data
-//						rollPath = rs.getString("rollPath");
+						// rollPath = rs.getString("rollPath");
 						storePath = rs.getString("storePath");
 						revisionId = rs.getLong("id");
 					}
-//					String filePath = rollPath + storePath;// not storePath+rollPath
-//					File rollFile = new File(filePath);
+					// String filePath = rollPath + storePath;// not
+					// storePath+rollPath
+					// File rollFile = new File(filePath);
 					File temFile = new File(fileSegInfo.getTemporaryFile());
-					if (StringUtils.isEmpty(storePath) && temFile.exists() && temFile.lastModified()>0) {
-						String updatePathSql ="UPDATE  " + FileRevisionTableName + " SET rollPath = '/' ,storePath='"+fileSegInfo.getTemporaryFile()+"',size="+fileSegInfo.getFileLength()+"   WHERE id = " + revisionId+" AND storePath is null ";// 改
-//						String updatePathSql ="UPDATE  " + getFileRevisionTable() + " SET storePath='"+fileSegInfo.getTemporaryFile()+"'  WHERE id = " + revisionId+" AND storePath is null ";// 改
-						log4j.debug("[mySQL] updatePathSql  SQL: " + updatePathSql);
-						if (stmt.executeUpdate(updatePathSql)> 0) {// 文件版本改名
-							//修改主文件大小值(不修改office2010会因，下载的大小不一致，提示恢复)
-							String upSizeSql = "UPDATE "+FileSysTableName+" SET size="+fileSegInfo.getFileLength()+" WHERE id="+fid;
+					if (StringUtils.isEmpty(storePath) && temFile.exists()
+							&& temFile.lastModified() > 0) {
+						String updatePathSql = "UPDATE  "
+								+ FileRevisionTableName
+								+ " SET rollPath = '/' ,storePath='"
+								+ fileSegInfo.getTemporaryFile() + "',size="
+								+ fileSegInfo.getFileLength()
+								+ "   WHERE id = " + revisionId
+								+ " AND storePath is null ";// 改
+						// String updatePathSql ="UPDATE  " +
+						// getFileRevisionTable() +
+						// " SET storePath='"+fileSegInfo.getTemporaryFile()+"'  WHERE id = "
+						// + revisionId+" AND storePath is null ";// 改
+						log4j.debug("[mySQL] updatePathSql  SQL: "
+								+ updatePathSql);
+						if (stmt.executeUpdate(updatePathSql) > 0) {// 文件版本改名
+							// 修改主文件大小值(不修改office2010会因，下载的大小不一致，提示恢复)
+							String upSizeSql = "UPDATE " + FileSysTableName
+									+ " SET size="
+									+ fileSegInfo.getFileLength()
+									+ " WHERE id=" + fid;
 							log4j.debug("[mySQL] upSizeSql  SQL: " + upSizeSql);
 							stmt.executeUpdate(upSizeSql);
+						} else {
+							log4j.error("DBI#renameFileRecord  修改临时路径失败!，无对应路径为空的 fid:"
+									+ fid);
 						}
-						else
-						{
-							log4j.error("DBI#renameFileRecord  修改临时路径失败!，无对应路径为空的 fid:"+fid);
-						}
-						if ( fileSegInfo != null) {
+						if (fileSegInfo != null) {
 							fileSegInfo.setQueued(false);
 							fileSegInfo.setUpdated(false);
 							fileSegInfo.setStatus(FileSegmentInfo.Saved);
 						}
-					}  
-					else
-					{
+					} else {
 						log4j.debug("BDI#modifyFileTemporaryFile 不符合修改条件");
 					}
 				}
 			} catch (SQLException ex) {
 				// DEBUG
-				log4j.error("BDI#modifyFileTemporaryFile error " + ex.getMessage());
+				log4j.error("BDI#modifyFileTemporaryFile error "
+						+ ex.getMessage());
 				// Rethrow the exception
 				throw new DBException(ex.getMessage());
 			} catch (Exception ex) {
-				log4j.error("BDI#modifyFileTemporaryFile error " + ex.getMessage());
+				log4j.error("BDI#modifyFileTemporaryFile error "
+						+ ex.getMessage());
 			} finally {
 
 				// Close the statement
@@ -3340,6 +3480,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 		return retDetails;
 	}
+	
 
 	/**
 	 * Start a directory search
@@ -3360,57 +3501,44 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	public DBSearchContext startSearch(int dirId, String searchPath,
 			int attrib, int infoLevel, int maxRecords, String userName,
 			String shareName) throws DBException {
-//		log4j.debug("DBI#startSearch dirId=" + dirId + ",path=" + searchPath 	+ ",userName=" + userName + ",shareName=" + shareName + " \n\n\n");
+		// log4j.debug("DBI#startSearch dirId=" + dirId + ",path=" + searchPath
+		// + ",userName=" + userName + ",shareName=" + shareName + " \n\n\n");
 		// if(dirId==0 &&
 		// searchPath.toLowerCase().contains(userName.toLowerCase()+DBUtil.SPECIAL_CHAR)==false
 		// && (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE) ||
-		// shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) ||  shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)
+		// shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) ||
+		// shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)
 		// shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE)))
-		if(dirId <= 0 && searchPath.indexOf("\\", 2)==-1)
-		{
-			return startSearchShares(dirId, searchPath, attrib, infoLevel, maxRecords, userName, shareName);
-		}
-		else
-		{
+		if (dirId <= 0 && searchPath.indexOf("\\", 2) == -1) {
+			return startSearchShares(dirId, searchPath, attrib, infoLevel,
+					maxRecords, userName, shareName);
+		} else {
 			int endpos = searchPath.indexOf("\\", 2);
-			if(endpos>0)
-			{
+			if (endpos > 0) {
 				shareName = searchPath.substring(1, endpos);
-			}
-			else
-			{
+			} else {
 				shareName = searchPath.substring(1);
 			}
-//			log4j.debug("DBI#startSearch截取后shareName=" + shareName + " \n\n\n");
+			// log4j.debug("DBI#startSearch截取后shareName=" + shareName +
+			// " \n\n\n");
 		}
-		
-		String FileSysTableName = FileSysTable_COMMFILE;
-		String FileRevisionTableName = FileRevisionTable_COMMFILE;
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-			FileSysTableName = FileSysTable_MYFILE;
-			FileRevisionTableName = FileRevisionTable_MYFILE;
-		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-			FileSysTableName = FileSysTable_COMMFILE;
-			FileRevisionTableName = FileRevisionTable_COMMFILE;
-		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-		{
-			FileSysTableName = FileSysTable_SHAREFILE;
-			FileRevisionTableName = FileRevisionTable_SHAREFILE;
-		}
-		
-//		if (dirId <= 0
-//				&& searchPath.toLowerCase().startsWith(
-//						"\\" + userName.toLowerCase() + DBUtil.SPECIAL_CHAR) == false) {
-//			log4j.info("BDI#startSearchU 加载用户层..");
-//			return startSearchU(dirId, searchPath, attrib, infoLevel,
-//					maxRecords, userName, shareName);
-//		}
-//		
-//		if(dirId ==0 && searchPath.equalsIgnoreCase("\\" + userName+ DBUtil.SPECIAL_CHAR))
-//		{
-//			return startSearchU(dirId, searchPath, attrib, infoLevel,
-//					maxRecords, userName, shareName);
-//		}
+
+		String FileSysTableName = getFileSysTableName(shareName);
+
+		// if (dirId <= 0
+		// && searchPath.toLowerCase().startsWith(
+		// "\\" + userName.toLowerCase() + DBUtil.SPECIAL_CHAR) == false) {
+		// log4j.info("BDI#startSearchU 加载用户层..");
+		// return startSearchU(dirId, searchPath, attrib, infoLevel,
+		// maxRecords, userName, shareName);
+		// }
+		//
+		// if(dirId ==0 && searchPath.equalsIgnoreCase("\\" + userName+
+		// DBUtil.SPECIAL_CHAR))
+		// {
+		// return startSearchU(dirId, searchPath, attrib, infoLevel,
+		// maxRecords, userName, shareName);
+		// }
 		//
 		// Search for files/folders in the specified folder
 		int userId = 0;
@@ -3420,14 +3548,14 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		WildCard wildCard = null;
 		int roleId = 0;
 		int departmentId = 0;
-		String noRightIds = ",";//无权限的fileId
-		String readonlyIds = ",";//只读的fildId
-		boolean isSuperAdmin = false;//资料库用
-		boolean isFileAdmin = false;//资料库用
-		long parentPermFileId = dirId;//资料库用
-		String parentPermissions = "";//资料库用
+		String noRightIds = ",";// 无权限的fileId
+		String readonlyIds = ",";// 只读的fildId
+		boolean isSuperAdmin = false;// 资料库用
+		boolean isFileAdmin = false;// 资料库用
+		long parentPermFileId = dirId;// 资料库用
+		String parentPermissions = "";// 资料库用
 		String groupIds = "";
-		String departmentPath ="";
+		String departmentPath = "";
 		try {
 			UserBean user = this.getUserByUsername(userName);
 			if (null != user) {
@@ -3440,17 +3568,18 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			stmt = conn.createStatement();
 
 			StringBuffer sql = new StringBuffer();
-			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE) || searchPath.startsWith(DBUtil.SHARENAME_RECIVEFILE)) {
+			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE)
+					|| searchPath.startsWith(DBUtil.SHARENAME_RECIVEFILE)) {
 				String fileIds = "";
 				if (dirId == 0) {
 					try {
 						// Check if the file already exists in the database
-						groupIds = this.getGroupIdsByUserid(userId,conn);
-						departmentPath = this.getDepartmentPathById(departmentId,conn);
+						groupIds = this.getGroupIdsByUserid(userId, conn);
+						departmentPath = this.getDepartmentPathById(
+								departmentId, conn);
 
 						StringBuffer recSql = new StringBuffer();
-						recSql
-								.append("SELECT DISTINCT fileId FROM jweb_sharefilereceive WHERE status>=0");
+						recSql.append("SELECT DISTINCT fileId FROM jweb_sharefilereceive WHERE status>=0");
 						recSql.append(" AND ( (type=0 AND receiver_id=")
 								.append(userId).append(")");
 						if (StringUtils.isNotEmpty(departmentPath)) {
@@ -3479,8 +3608,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				}
 				// 查询语句
 				sql = new StringBuffer();
-				sql
-						.append("SELECT id,pid,name,size,add_time,lastModified,isFile,userId,permissions FROM ");
+				sql.append("SELECT id,pid,name,size,add_time,lastModified,isFile,userId,permissions FROM ");
 				sql.append(FileSysTableName);
 				sql.append(" WHERE status>=0 AND pid = ").append(dirId);
 				if (dirId == 0) {
@@ -3491,21 +3619,27 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 					}
 				}
 				sql.append(" AND userId=").append(userId);
-			} else if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)  || searchPath.startsWith(DBUtil.SHARENAME_COMMFILE)) {
+			} else if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE)
+					|| shareName
+							.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)
+					|| searchPath.startsWith(DBUtil.SHARENAME_COMMFILE)) {
 				if (roleId == 1) {// 超级管理员权限 直接查询出来
 					isSuperAdmin = true;
-				}
-				else
-				{
+				} else {
 					// 查询是否为库管理员
 					if (dirId > 0) {
-						String auditorSql = "SELECT auditorId FROM "+ FileSysTableName+" WHERE id=(SELECT pid1 FROM "+ FileSysTableName+" WHERE id=" + dirId + ")";
+						String auditorSql = "SELECT auditorId FROM "
+								+ FileSysTableName
+								+ " WHERE id=(SELECT pid1 FROM "
+								+ FileSysTableName + " WHERE id=" + dirId + ")";
 						try {
-							log4j.debug("[mySQL] auditorSql  SQL: " + auditorSql);
+							log4j.debug("[mySQL] auditorSql  SQL: "
+									+ auditorSql);
 							ResultSet rs2 = stmt.executeQuery(auditorSql);
 							String auditorId = "";
 							while (rs2.next()) {
-								auditorId = "," + rs2.getString("auditorId") + ",";
+								auditorId = "," + rs2.getString("auditorId")
+										+ ",";
 							}
 							rs2.close();
 							if (auditorId.contains("," + userId + ",")) {
@@ -3516,25 +3650,27 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 						}
 					}
 				}
-				if(isSuperAdmin==false && isFileAdmin==false)
-				{
-					groupIds = this.getGroupIdsByUserid(userId,conn);
-					departmentPath = this.getDepartmentPathById(departmentId,conn);	
-					
-					String PathSql = "SELECT permissionsFileId FROM "+ FileSysTableName+" WHERE id =" + dirId;
+				if (isSuperAdmin == false && isFileAdmin == false) {
+					groupIds = this.getGroupIdsByUserid(userId, conn);
+					departmentPath = this.getDepartmentPathById(departmentId,
+							conn);
+
+					String PathSql = "SELECT permissionsFileId FROM "
+							+ FileSysTableName + " WHERE id =" + dirId;
 					log4j.debug("[mySQL] PathSql SQL:" + PathSql);
 					ResultSet pathRs = stmt.executeQuery(PathSql);
 					if (pathRs.next()) {
 						parentPermFileId = pathRs.getInt("permissionsFileId");
 					}
 					pathRs.close();
-					 
-					if(dirId>0)
-					{
-						parentPermissions = this.filePermissions(parentPermFileId, userId, groupIds, departmentPath,conn);//重新获得权限
+
+					if (dirId > 0) {
+						parentPermissions = this.filePermissions(
+								parentPermFileId, userId, groupIds,
+								departmentPath, conn);// 重新获得权限
 					}
 				}
-				
+
 				// 查询语句
 				sql = new StringBuffer();
 				sql.append("SELECT id,pid,name,size,add_time,lastModified,isFile,userId,permissionsFileId,islock,lockedByUser FROM ");
@@ -3542,6 +3678,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				sql.append(" WHERE  status >= 0 AND pid = ").append(dirId);
 				if (dirId == 0) {
 					sql.append(" AND type IN(0,2)");
+					sql.append(" AND (commonfile_enabled = '1' OR commonfile_enabled is null "
+							+ "OR trim(commonfile_enabled) = '' ) ");
 				}
 			} else {
 				// 查询语句
@@ -3581,10 +3719,10 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 						// Add the wildcard file extension SELECTion clause to
 						// the SELECT
 
-						sql.append(" AND lower(name) LIKE lower('");
+						sql.append(" AND name LIKE '");
 						sql.append(checkNameForSpecialChars(wildCard
 								.getMatchPart()));
-						sql.append("%')");
+						sql.append("%'");
 
 						// Clear the wildcard object, we do not want it to
 						// filter the search results
@@ -3599,10 +3737,10 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 						// sql.append(checkNameForSpecialChars(wildCard.getMatchPart()));
 						// sql.append("'))");
 
-						sql.append(" AND lower(name) LIKE lower('");
+						sql.append(" AND name LIKE '");
 						sql.append(checkNameForSpecialChars(wildCard
 								.getMatchPart()));
-						sql.append("%')");
+						sql.append("%'");
 
 						// Clear the wildcard object, we do not want it to
 						// filter the search results
@@ -3616,102 +3754,98 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				// sql.append(" AND lower(name) = lower('");
 				// sql.append(checkNameForSpecialChars(paths[1]));
 				// sql.append("')");
-				if (StringUtils.isNotEmpty(paths[1]) && !(userName.toLowerCase() + DBUtil.SPECIAL_CHAR).equals(paths[1]))// 空时不执行
+				if (StringUtils.isNotEmpty(paths[1])
+						&& !(userName.toLowerCase() + DBUtil.SPECIAL_CHAR)
+								.equals(paths[1]))// 空时不执行
 				{
-					sql.append(" AND lower(name) LIKE lower('");
+					sql.append(" AND name LIKE '");
 					sql.append(checkNameForSpecialChars(paths[1]));
-					sql.append("%')");
+					sql.append("%'");
 				}
 			}
 
 			// Return directories first
 
-//			sql.append(" ORDER BY isFile DESC");
+			// sql.append(" ORDER BY isFile DESC");
 
 			// Get a connection to the database
 			log4j.debug("[mySQL] Start search SQL: " + sql.toString());
 			// Start the folder search
 			rs = stmt.executeQuery(sql.toString());
-			//遍历权限
-			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS))
-			{
-				if(isSuperAdmin==false && isFileAdmin==false)
-				{
+			// 遍历权限
+			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE)
+					|| shareName
+							.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+				if (isSuperAdmin == false && isFileAdmin == false) {
 					ArrayList<java.util.Map> fileList = new ArrayList<java.util.Map>();
 					java.util.Map fmap = null;
-					while(rs.next())
-					{
+					while (rs.next()) {
 						fmap = new java.util.HashMap();
 						fmap.put("id", rs.getLong("id"));
-						if(dirId>0)
-						{
-							fmap.put("permissionsFileId", rs.getLong("permissionsFileId"));
-						}
-						else
-						{
+						if (dirId > 0) {
+							fmap.put("permissionsFileId",
+									rs.getLong("permissionsFileId"));
+						} else {
 							fmap.put("permissionsFileId", rs.getLong("id"));
 						}
 						fileList.add(fmap);
 					}
-					
-					if(null != fileList && fileList.size()>0)
-					{
+
+					if (null != fileList && fileList.size() > 0) {
 						long permissionsFileId = 0;
 						String permissions = "";
 						long fileId = 0;
-						for(java.util.Map map:fileList)
-						{
+						for (java.util.Map map : fileList) {
 							fileId = Long.parseLong(map.get("id").toString());
-							if(StringUtils.isEmpty(parentPermissions) && dirId>0)
-							{
-								//无权限
-								noRightIds +=fileId+",";//上级无权限，则全部无权限
-							}
-							else
-							{
-								permissionsFileId = Long.parseLong(map.get("permissionsFileId").toString());
-								if(permissionsFileId<=0)
-								{
-									permissionsFileId = parentPermFileId;//解决permissionsFileId为0无权限问题
+							if (StringUtils.isEmpty(parentPermissions)
+									&& dirId > 0) {
+								// 无权限
+								noRightIds += fileId + ",";// 上级无权限，则全部无权限
+							} else {
+								permissionsFileId = Long.parseLong(map.get(
+										"permissionsFileId").toString());
+								if (permissionsFileId <= 0) {
+									permissionsFileId = parentPermFileId;// 解决permissionsFileId为0无权限问题
 								}
-								if(parentPermFileId!=permissionsFileId)
-								{
-									//与上级权限不一致
-									permissions = this.filePermissions(permissionsFileId, userId, groupIds, departmentPath,conn);//重新获得权限
-									if(StringUtils.isNotEmpty(permissions) && permissions.contains("w"))
-									{
-										//有读写权限
+								if (parentPermFileId != permissionsFileId) {
+									// 与上级权限不一致
+									permissions = this.filePermissions(
+											permissionsFileId, userId,
+											groupIds, departmentPath, conn);// 重新获得权限
+									if (StringUtils.isNotEmpty(permissions)
+											&& permissions.contains("w")) {
+										// 有读写权限
+									} else if (StringUtils
+											.isNotEmpty(permissions)
+											&& permissions.contains("r")) {
+										// 只读权限
+										readonlyIds += fileId + ",";
+									} else {
+										// 无权限
+										noRightIds += fileId + ",";
 									}
-									else if(StringUtils.isNotEmpty(permissions) && permissions.contains("r"))
+								} else {
+									if (parentPermissions.contains("w") == false)// 上级为只读权限
 									{
-										//只读权限
-										readonlyIds += fileId+",";
-									}
-									else
-									{
-										//无权限
-										noRightIds += fileId+",";
-									}
-								}
-								else
-								{
-									if(parentPermissions.contains("w")==false)//上级为只读权限
-									{
-										//只读权限
-										readonlyIds += fileId+",";
+										// 只读权限
+										readonlyIds += fileId + ",";
 									}
 								}
 							}
-							log4j.debug(" \n"+fileId+" ,permissionsFileId:"+permissionsFileId+" , permissions:"+permissions);
+							log4j.debug(" \n" + fileId + " ,permissionsFileId:"
+									+ permissionsFileId + " , permissions:"
+									+ permissions);
 						}
 					}
-					fileList = null;//清空对象
-					if(StringUtils.isNotEmpty(noRightIds) && noRightIds.length()>1)
-					{
-						String noIds = StringUtil.dealSQLInStatementId(noRightIds);
-						sql.append(" AND id NOT IN(").append(noIds).append(") ");
+					fileList = null;// 清空对象
+					if (StringUtils.isNotEmpty(noRightIds)
+							&& noRightIds.length() > 1) {
+						String noIds = StringUtil
+								.dealSQLInStatementId(noRightIds);
+						sql.append(" AND id NOT IN(").append(noIds)
+								.append(") ");
 					}
-					//重新获得rs
+					// 重新获得rs
 					rs = stmt.executeQuery(sql.toString());
 				}
 			}
@@ -3732,12 +3866,13 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		}
 
 		// Create the search context, and return
-		if(readonlyIds.length()>1 || noRightIds.length()>1)
-		{
-			log4j.debug("readonlyIds:"+readonlyIds+" ,noRightIds:"+noRightIds);
-			return new MySQLSearchContext(rs, wildCard, shareName,userId,readonlyIds,noRightIds);
+		if (readonlyIds.length() > 1 || noRightIds.length() > 1) {
+			log4j.debug("readonlyIds:" + readonlyIds + " ,noRightIds:"
+					+ noRightIds);
+			return new MySQLSearchContext(rs, wildCard, shareName, userId,
+					readonlyIds, noRightIds);
 		}
-		return new MySQLSearchContext(rs, wildCard, shareName,userId);
+		return new MySQLSearchContext(rs, wildCard, shareName, userId);
 	}
 
 	/**
@@ -3756,63 +3891,42 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 * @return DBSearchContext
 	 * @exception DBException
 	 */
-	/*public DBSearchContext startSearchU(int dirId, String searchPath,
-			int attrib, int infoLevel, int maxRecords, String userName,
-			String shareName) throws DBException {
-//		log4j.debug("DBI#startSearchU ; dirId=" + dirId + ",path=" + searchPath + ",userName=" + userName + ",shareName=" + shareName);
-		// Search for files/folders in the specified folder
-		ResultSet rs = null;
-		Connection conn = null;
-		Statement stmt = null;
+	/*
+	 * public DBSearchContext startSearchU(int dirId, String searchPath, int
+	 * attrib, int infoLevel, int maxRecords, String userName, String shareName)
+	 * throws DBException { // log4j.debug("DBI#startSearchU ; dirId=" + dirId +
+	 * ",path=" + searchPath + ",userName=" + userName + ",shareName=" +
+	 * shareName); // Search for files/folders in the specified folder ResultSet
+	 * rs = null; Connection conn = null; Statement stmt = null;
+	 * 
+	 * StringBuffer sql = new StringBuffer();
+	 * sql.append("SELECT id,concat(username,'"
+	 * +DBUtil.SPECIAL_CHAR+"') AS name,regdate,lastvisit FROM ");
+	 * sql.append(" jweb_users WHERE status >=0  AND lower(username) = lower('"+
+	 * userName + "')"); // String[] paths = FileName.splitPath(searchPath); //
+	 * Check if the file name contains wildcard characters //
+	 * MySQLSearchContextU context = null; WildCard wildCard = null; try {
+	 * //ResultSet 因为有打开关闭问题，不能使用cache. 后期再改进 // CacheManager cacheManager =
+	 * CacheManagerUtil.getCacheManager(); // Cache cache = null; // if (null !=
+	 * cacheManager) { // cache = cacheManager.getCache("SearchUCache"); //
+	 * Element element = cache.get(userName); // if (null != element &&
+	 * element.getObjectValue() != null) { // context = (MySQLSearchContextU)
+	 * element.getObjectValue(); // if(null != context &&
+	 * context.numberOfEntries()>0) // { //
+	 * log4j.debug("@@ Cache hit - startSearchU :"+ userName); // return
+	 * context; // } // } // } conn = getConnection(); stmt =
+	 * conn.createStatement(); log4j.debug("[mySQL] Start search SQL: " +
+	 * sql.toString()); rs = stmt.executeQuery(sql.toString()); // context =new
+	 * MySQLSearchContextU(rs, wildCard, shareName, userName); // if(null !=
+	 * context && context.numberOfEntries()>0) // { // // 添加到缓存 // Element
+	 * element = new Element(userName, context); // if (null != cache) { //
+	 * cache.put(element); // } // } } catch (Exception ex) {
+	 * log4j.error("[mySQL] Start searchU error ",ex); throw new
+	 * DBException(ex.getMessage()); } finally { if (conn != null)
+	 * releaseConnection(conn); } // Create the search context, and return
+	 * return new MySQLSearchContextU(rs, wildCard, shareName, userName); }
+	 */
 
-		StringBuffer sql = new StringBuffer();
-		sql.append("SELECT id,concat(username,'"+DBUtil.SPECIAL_CHAR+"') AS name,regdate,lastvisit FROM ");
-		sql.append(" jweb_users WHERE status >=0  AND lower(username) = lower('"+ userName + "')");
-		// String[] paths = FileName.splitPath(searchPath);
-		// Check if the file name contains wildcard characters
-//		MySQLSearchContextU context = null;
-		WildCard wildCard = null;
-		try {
-			//ResultSet 因为有打开关闭问题，不能使用cache. 后期再改进
-//			CacheManager cacheManager = CacheManagerUtil.getCacheManager();
-//			Cache cache = null;
-//			if (null != cacheManager) {
-//				cache = cacheManager.getCache("SearchUCache");
-//				Element element = cache.get(userName);
-//				if (null != element && element.getObjectValue() != null) {
-//					context = (MySQLSearchContextU) element.getObjectValue();
-//					if(null != context && context.numberOfEntries()>0)
-//					{
-//						log4j.debug("@@ Cache hit - startSearchU :"+ userName);
-//						return context;
-//					}
-//				}
-//			}
-			conn = getConnection();
-			stmt = conn.createStatement();
-			log4j.debug("[mySQL] Start search SQL: " + sql.toString());
-			rs = stmt.executeQuery(sql.toString());
-//			context =new MySQLSearchContextU(rs, wildCard, shareName, userName);
-//			if(null != context && context.numberOfEntries()>0)
-//			{
-//				// 添加到缓存
-//				Element element = new Element(userName, context);
-//				if (null != cache) {
-//					cache.put(element);
-//				}
-//			}
-		} catch (Exception ex) {
-			log4j.error("[mySQL] Start searchU error ",ex);
-			throw new DBException(ex.getMessage());
-		} finally {
-			if (conn != null)
-				releaseConnection(conn);
-		}
-		// Create the search context, and return
-		return new MySQLSearchContextU(rs, wildCard, shareName, userName);
-	}*/
-	
-	
 	/**
 	 * Start a directory search
 	 * 
@@ -3832,28 +3946,30 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	public DBSearchContext startSearchShares(int dirId, String searchPath,
 			int attrib, int infoLevel, int maxRecords, String userName,
 			String shareName) throws DBException {
-//		log4j.debug("DBI#startSearchU ; dirId=" + dirId + ",path=" + searchPath + ",userName=" + userName + ",shareName=" + shareName);
+		// log4j.debug("DBI#startSearchU ; dirId=" + dirId + ",path=" +
+		// searchPath + ",userName=" + userName + ",shareName=" + shareName);
 		// Search for files/folders in the specified folder
 		ResultSet rs = null;
 		Connection conn = null;
 		Statement stmt = null;
 		DBSearchContext context = null;
-		WildCard wildCard = null;		
+		WildCard wildCard = null;
 		try {
 			int userId = 0;
 			UserBean user = this.getUserByUsername(userName);
 			if (null != user) {
 				userId = user.getId();
-			}			
-			//最上层不用uid,提高效率
+			}
+			// 最上层不用uid,提高效率
 			conn = getConnection();
 			stmt = conn.createStatement();
 			String baseUrl = getBaseUrl(conn);
-			log4j.debug("[mySQL] Start search SQL: " +searchShares_sql);
+			log4j.debug("[mySQL] Start search SQL: " + searchShares_sql);
 			rs = stmt.executeQuery(searchShares_sql);
-			context =new MySQLSearchContextShare(rs, wildCard, shareName,userId,baseUrl);
+			context = new MySQLSearchContextShare(rs, wildCard, shareName,
+					userId, baseUrl);
 		} catch (Exception ex) {
-			log4j.error("[mySQL] Start SearchSharesCache error ",ex);
+			log4j.error("[mySQL] Start SearchSharesCache error ", ex);
 			throw new DBException(ex.getMessage());
 		} finally {
 			if (conn != null)
@@ -3931,7 +4047,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 * @exception DBException
 	 */
 	public void queueFileRequest(FileRequest req) throws DBException {
-		log4j.debug("DBI#queueFileRequest FileRequest:"+req);
+		log4j.debug("DBI#queueFileRequest FileRequest:" + req);
 		// Make sure the associated file state stays in memory for a short time,
 		// if the queue is
 		// small
@@ -4036,7 +4152,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 				// DEBUG
 
-				log4j.error("DBI#queueFileRequest ERROR; fileReq:"+fileReq , ex);
+				log4j.error("DBI#queueFileRequest ERROR; fileReq:" + fileReq,
+						ex);
 
 				// Rethrow the exception
 
@@ -4064,21 +4181,22 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			String tempDirPrefix, String tempFilePrefix, String jarFilePrefix)
 			throws DBException {
 		// Get a connection to the database
-		log4j.debug("DBI#performQueueCleanup tempDir:"+tempDir+" , tempDirPrefix:"+tempDirPrefix+" , tempFilePrefix:"+tempFilePrefix+" , jarFilePrefix:"+jarFilePrefix);
-		
+		log4j.debug("DBI#performQueueCleanup tempDir:" + tempDir
+				+ " , tempDirPrefix:" + tempDirPrefix + " , tempFilePrefix:"
+				+ tempFilePrefix + " , jarFilePrefix:" + jarFilePrefix);
+
 		String FileSysTableName = FileSysTable_COMMFILE;
 		String shareName = "资料库";
-		if(tempDir.getName().equalsIgnoreCase("smb"))//个人文件　
+		if (tempDir.getName().equalsIgnoreCase("smb"))// 个人文件　
 		{
 			FileSysTableName = FileSysTable_MYFILE;
 			shareName = "我的文件";
-		}
-		else if(tempDir.getName().equalsIgnoreCase("smbshare"))//资料库
+		} else if (tempDir.getName().equalsIgnoreCase("smbshare"))// 资料库
 		{
 			FileSysTableName = FileSysTable_SHAREFILE;
 			shareName = "我收到的共享文件";
 		}
-		
+
 		Connection conn = null;
 		PreparedStatement pstmt = null;
 		Statement stmt = null;
@@ -4094,7 +4212,9 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			// Delete all load requests FROM the queue
 
 			stmt = conn.createStatement();
-			ResultSet rs = stmt.executeQuery("SELECT * FROM " + getQueueTableName() + " WHERE ReqType = " + FileRequest.LOAD + ";");
+			ResultSet rs = stmt.executeQuery("SELECT * FROM "
+					+ getQueueTableName() + " WHERE ReqType = "
+					+ FileRequest.LOAD + ";");
 
 			while (rs.next()) {
 
@@ -4109,7 +4229,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 					// Delete the cache file for the load request
 					tempFile.delete();
 					// DEBUG
-					log4j.debug("[mySQL] Deleted load request file " 	+ tempPath);
+					log4j.debug("[mySQL] Deleted load request file " + tempPath);
 				}
 			}
 
@@ -4147,18 +4267,20 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 					// DEBUG
 					log4j.debug("[mySQL] Failed to created crash recovery folder, using folder - "
-									+ crashFolder.getAbsolutePath());
+							+ crashFolder.getAbsolutePath());
 				}
 			}
 
 			// Delete the file load request records
 
-			stmt.execute("DELETE FROM " + getQueueTableName() + " WHERE ReqType = " + FileRequest.LOAD + ";");
+			stmt.execute("DELETE FROM " + getQueueTableName()
+					+ " WHERE ReqType = " + FileRequest.LOAD + ";");
 
 			// Create a statement to check if a temporary file is part of a save
 			// request
 
-			pstmt = conn.prepareStatement("SELECT FileId,SeqNo FROM " + getQueueTableName() + " WHERE TempFile = ?;");
+			pstmt = conn.prepareStatement("SELECT FileId,SeqNo FROM "
+					+ getQueueTableName() + " WHERE TempFile = ?;");
 
 			// Scan all files/sub-directories within the temporary area looking
 			// for files that have
@@ -4177,7 +4299,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 					File curFile = tempFiles[i];
 
-					if (curFile.isDirectory() && curFile.getName().startsWith(tempDirPrefix)) {
+					if (curFile.isDirectory()
+							&& curFile.getName().startsWith(tempDirPrefix)) {
 
 						// Check if the sub-directory has any loader temporary
 						// files
@@ -4195,75 +4318,132 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 								File ldrFile = subFiles[j];
 
-								if (ldrFile.isFile() && ldrFile.getName().startsWith(
+								if (ldrFile.isFile()
+										&& ldrFile.getName().startsWith(
 												tempFilePrefix)) {
 
 									try {
 
-										// Get the file details FROM the file system table
+										// Get the file details FROM the file
+										// system table
 
 										pstmt.clearParameters();
-										pstmt.setString(1, ldrFile
-												.getAbsolutePath());
+										pstmt.setString(1,
+												ldrFile.getAbsolutePath());
 
 										rs = pstmt.executeQuery();
 
 										if (rs.next()) {
 
-											// File save request exists for temp file, nothing to do
+											// File save request exists for temp
+											// file, nothing to do
 
 										} else {
 
-											// Check if the modified date indicates the file may  have been updated
+											// Check if the modified date
+											// indicates the file may have been
+											// updated
 
 											if (ldrFile.lastModified() != 0L) {
 
-												// Get the file id FROM the cache file name
+												// Get the file id FROM the
+												// cache file name
 
-												String fname = ldrFile.getName();
+												String fname = ldrFile
+														.getName();
 												int dotPos = fname.indexOf('.');
-												String fidStr = fname.substring(tempFilePrefix.length(),dotPos);
+												String fidStr = fname
+														.substring(
+																tempFilePrefix
+																		.length(),
+																dotPos);
 
 												if (fidStr.indexOf('_') == -1) {
 													// Convert the file id
 													int fid = -1;
 													try {
-														fid = Integer.parseInt(fidStr);
+														fid = Integer
+																.parseInt(fidStr);
 													} catch (NumberFormatException e) {
-														log4j.error("[mySQL] startSearch performQueueCleanup error "+ e.getMessage());
+														log4j.error("[mySQL] startSearch performQueueCleanup error "
+																+ e.getMessage());
 													}
 
 													// Get the file details FROM
 													// the database
 
 													if (fid != -1) {
-														log4j.error("\n\n\n###此处删除的部分代码： fid="+fid +" , cleanShutdown 未执行...\n\n\n");
+														log4j.error("\n\n\n###此处删除的部分代码： fid="
+																+ fid
+																+ " , cleanShutdown 未执行...\n\n\n");
 														/**/
-													    // Get the file details for the temp file using the file id
-														rs = stmt.executeQuery("SELECT * FROM "+ FileSysTableName+ " WHERE id = "+ fid+ ";");
+														// Get the file details
+														// for the temp file
+														// using the file id
+														rs = stmt
+																.executeQuery("SELECT * FROM "
+																		+ FileSysTableName
+																		+ " WHERE id = "
+																		+ fid
+																		+ ";");
 
-														// If the previous server shutdown was clean  then we may be able  to queue the file  save
+														// If the previous
+														// server shutdown was
+														// clean then we may be
+														// able to queue the
+														// file save
 
 														if (cleanShutdown == true) {
 															if (rs.next()) {
-																// Get the  currently  stored modifed date and file  size for the  associated  file
+																// Get the
+																// currently
+																// stored
+																// modifed date
+																// and file size
+																// for the
+																// associated
+																// file
 
-																long dbModDate = rs.getLong("lastModified");
-																long dbFileSize = rs.getLong("size");
+																long dbModDate = rs
+																		.getLong("lastModified");
+																long dbFileSize = rs
+																		.getLong("size");
 
-																// Check if the temp file requires  saving
+																// Check if the
+																// temp file
+																// requires
+																// saving
 
-																if (ldrFile.length() != dbFileSize || ldrFile.lastModified() > dbModDate) {
+																if (ldrFile
+																		.length() != dbFileSize
+																		|| ldrFile
+																				.lastModified() > dbModDate) {
 
-																	// Build the  filesystem  path to the file
+																	// Build the
+																	// filesystem
+																	// path to
+																	// the file
 																	// TODO
-																	String filesysPath = buildPathForFileId(fid,stmt,shareName);
+																	String filesysPath = buildPathForFileId(
+																			fid,
+																			stmt,
+																			shareName);
 
 																	if (filesysPath != null) {
 
-																		// Create a  file  state for the file
+																		// Create
+																		// a
+																		// file
+																		// state
+																		// for
+																		// the
+																		// file
 
-																		FileState fstate = m_dbCtx.getStateCache().findFileState(filesysPath,true);
+																		FileState fstate = m_dbCtx
+																				.getStateCache()
+																				.findFileState(
+																						filesysPath,
+																						true);
 
 																		FileSegmentInfo fileSegInfo = (FileSegmentInfo) fstate
 																				.findAttribute(ObjectIdFileLoader.DBFileSegmentInfo);
@@ -4271,111 +4451,234 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 																		if (fileSegInfo == null) {
 
-																			// Create  a  new file segment
+																			// Create
+																			// a
+																			// new
+																			// file
+																			// segment
 
 																			fileSegInfo = new FileSegmentInfo();
-																			fileSegInfo.setTemporaryFile(ldrFile.getAbsolutePath());
+																			fileSegInfo
+																					.setTemporaryFile(ldrFile
+																							.getAbsolutePath());
 
-																			fileSeg = new FileSegment(fileSegInfo,true);
-																			fileSeg.setStatus(FileSegmentInfo.SaveWait,true);
+																			fileSeg = new FileSegment(
+																					fileSegInfo,
+																					true);
+																			fileSeg.setStatus(
+																					FileSegmentInfo.SaveWait,
+																					true);
 
-																			// Add  the  segment  to  the file state cache
-																			fstate.addAttribute(ObjectIdFileLoader.DBFileSegmentInfo,fileSegInfo);
+																			// Add
+																			// the
+																			// segment
+																			// to
+																			// the
+																			// file
+																			// state
+																			// cache
+																			fstate.addAttribute(
+																					ObjectIdFileLoader.DBFileSegmentInfo,
+																					fileSegInfo);
 
-																			// Add  a  file  save  request  for  the temp  file  to  the  recovery queue
+																			// Add
+																			// a
+																			// file
+																			// save
+																			// request
+																			// for
+																			// the
+																			// temp
+																			// file
+																			// to
+																			// the
+																			// recovery
+																			// queue
 
-																			reqQueue.addRequest(new SingleFileRequest( FileRequest.SAVE, fid, 0, ldrFile.getAbsolutePath(), filesysPath,
-																							fstate));
+																			reqQueue.addRequest(new SingleFileRequest(
+																					FileRequest.SAVE,
+																					fid,
+																					0,
+																					ldrFile.getAbsolutePath(),
+																					filesysPath,
+																					fstate));
 
-																			// Update the  file  size and modified  date/time  in the filesystem  database
+																			// Update
+																			// the
+																			// file
+																			// size
+																			// and
+																			// modified
+																			// date/time
+																			// in
+																			// the
+																			// filesystem
+																			// database
 
-																			stmt.execute("UPDATE " + FileSysTableName+ " SET size = " + ldrFile.length() 	+ ", lastModified = " + ldrFile .lastModified() + " WHERE id = " + fid + ";");
+																			stmt.execute("UPDATE "
+																					+ FileSysTableName
+																					+ " SET size = "
+																					+ ldrFile
+																							.length()
+																					+ ", lastModified = "
+																					+ ldrFile
+																							.lastModified()
+																					+ " WHERE id = "
+																					+ fid
+																					+ ";");
 
 																			// DEBUG
 
-																			log4j.debug("[mySQL] Queued save request for " + ldrFile.getName() + ", path=" + filesysPath + ", fid=" 	+ fid);
+																			log4j.debug("[mySQL] Queued save request for "
+																					+ ldrFile
+																							.getName()
+																					+ ", path="
+																					+ filesysPath
+																					+ ", fid="
+																					+ fid);
 																		}
 																	} else {
 
-																		// Delete  the temp file,  cannot resolve the path
+																		// Delete
+																		// the
+																		// temp
+																		// file,
+																		// cannot
+																		// resolve
+																		// the
+																		// path
 																		ldrFile.delete();
 
 																		// DEBUG
-																		log4j .debug("[mySQL] Cannot resolve filesystem path for FID " + fid 	+ ", deleted file " + ldrFile .getName());
+																		log4j.debug("[mySQL] Cannot resolve filesystem path for FID "
+																				+ fid
+																				+ ", deleted file "
+																				+ ldrFile
+																						.getName());
 																	}
 																}
 															} else {
 
-																// Delete the  temp file, file does  not exist in  the
-																// filesystem table
+																// Delete the
+																// temp file,
+																// file does not
+																// exist in the
+																// filesystem
+																// table
 
 																ldrFile.delete();
 
 																// DEBUG
-																log4j.debug("[mySQL] No matching file record for FID " + fid + ", deleted file "
-																				+ ldrFile.getName());
+																log4j.debug("[mySQL] No matching file record for FID "
+																		+ fid
+																		+ ", deleted file "
+																		+ ldrFile
+																				.getName());
 															}
 														} else {
 
-															// File server did not shutdown
-															// cleanly so move any  modified files to a
-															// holding area as  they may be corrupt
+															// File server did
+															// not shutdown
+															// cleanly so move
+															// any modified
+															// files to a
+															// holding area as
+															// they may be
+															// corrupt
 
-															if (rs.next() && hasCrashRecovery()) {
+															if (rs.next()
+																	&& hasCrashRecovery()) {
 
-																// Get the filesystem file name
-																String extName = rs.getString("name");
+																// Get the
+																// filesystem
+																// file name
+																String extName = rs
+																		.getString("name");
 
-																// Generate a file name to  rename  the cache
-																// file into a crash  recovery  folder
-																File crashFile = new File(crashFolder, "" + fid + "_" + extName);
+																// Generate a
+																// file name to
+																// rename the
+																// cache
+																// file into a
+																// crash
+																// recovery
+																// folder
+																File crashFile = new File(
+																		crashFolder,
+																		""
+																				+ fid
+																				+ "_"
+																				+ extName);
 
-																// Rename the cache file  into the crash recovery folder
-																if (ldrFile.renameTo(crashFile)) {
+																// Rename the
+																// cache file
+																// into the
+																// crash
+																// recovery
+																// folder
+																if (ldrFile
+																		.renameTo(crashFile)) {
 																	// DEBUG
-																	log4j.debug("[mySQL] Crash recovery file - " + crashFile .getAbsolutePath());
+																	log4j.debug("[mySQL] Crash recovery file - "
+																			+ crashFile
+																					.getAbsolutePath());
 																}
 															} else {
 																// DEBUG
-																log4j.debug("[mySQL] Deleted incomplete cache file - " + ldrFile.getAbsolutePath());
+																log4j.debug("[mySQL] Deleted incomplete cache file - "
+																		+ ldrFile
+																				.getAbsolutePath());
 
-																// Delete the  incomplete cache file
+																// Delete the
+																// incomplete
+																// cache file
 																ldrFile.delete();
 															}
 														}/**/
 													} else {
 
-														// Invalid file id format, delete the  temp file
+														// Invalid file id
+														// format, delete the
+														// temp file
 
 														ldrFile.delete();
 														// DEBUG
 
-														log4j.debug("[mySQL] Bad file id format, deleted file, " + ldrFile.getName());
+														log4j.debug("[mySQL] Bad file id format, deleted file, "
+																+ ldrFile
+																		.getName());
 													}
 												} else {
 
-													// Delete the temp file as  it is for an NTFS  stream
+													// Delete the temp file as
+													// it is for an NTFS stream
 													ldrFile.delete();
 
 													// DEBUG
-													log4j.debug("[mySQL] Deleted NTFS stream temp file, " + ldrFile.getName());
+													log4j.debug("[mySQL] Deleted NTFS stream temp file, "
+															+ ldrFile.getName());
 												}
 											} else {
 
-												// Delete the temp file as it has not been modified since it was loaded
+												// Delete the temp file as it
+												// has not been modified since
+												// it was loaded
 												ldrFile.delete();
 
 												// DEBUG
-												log4j.debug("[mySQL] Deleted unmodified temp file, " 	+ ldrFile.getName());
+												log4j.debug("[mySQL] Deleted unmodified temp file, "
+														+ ldrFile.getName());
 											}
 										}
 									} catch (SQLException ex) {
-										log4j.error("[mySQL] startSearch performQueueCleanup Deleted error " + ex.getMessage());
+										log4j.error("[mySQL] startSearch performQueueCleanup Deleted error "
+												+ ex.getMessage());
 									}
 								} else {
 
 									// DEBUG
-									log4j.debug("[mySQL] Deleted temporary file " + ldrFile.getName());
+									log4j.debug("[mySQL] Deleted temporary file "
+											+ ldrFile.getName());
 
 									// Delete the temporary file
 									ldrFile.delete();
@@ -4399,7 +4702,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 						+ lockFile.getAbsolutePath());
 			}
 		} catch (SQLException ex) {
-			log4j.error("DBI#performQueueCleanup ERROR " , ex);
+			log4j.error("DBI#performQueueCleanup ERROR ", ex);
 		} finally {
 
 			// Close the load request statement
@@ -4445,7 +4748,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 */
 	public boolean hasQueuedRequest(String tempFile, boolean lastFile)
 			throws DBException {
-		log4j.debug("DBI#hasQueuedRequest tempFile:"+tempFile+" , lastFile:"+lastFile);
+		log4j.debug("DBI#hasQueuedRequest tempFile:" + tempFile
+				+ " , lastFile:" + lastFile);
 		Connection conn = null;
 		Statement stmt = null;
 
@@ -4486,7 +4790,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 					queued = true;
 			}
 		} catch (SQLException ex) {
-			log4j.error("DBI#hasQueuedRequest ERROR " , ex);
+			log4j.error("DBI#hasQueuedRequest ERROR ", ex);
 
 			// Rethrow the exception
 
@@ -4521,7 +4825,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 * @exception DBException
 	 */
 	public void deleteFileRequest(FileRequest fileReq) throws DBException {
-		log4j.debug("DBI#deleteFileRequest FileRequest:"+fileReq);
+		log4j.debug("DBI#deleteFileRequest FileRequest:" + fileReq);
 		Connection conn = null;
 		Statement stmt = null;
 
@@ -4556,7 +4860,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			}
 		} catch (SQLException ex) {
 
-			log4j.error("DBI#deleteFileRequest ERROR " , ex);
+			log4j.error("DBI#deleteFileRequest ERROR ", ex);
 			// Rethrow the exception
 
 			throw new DBException(ex.getMessage());
@@ -4595,7 +4899,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	public int loadFileRequests(int fromSeqNo, int reqType,
 			FileRequestQueue reqQueue, int recLimit) throws DBException {
 		// Load a block of file requests from the loader queue
-		log4j.debug("DBI#loadFileRequests fromSeqNo:"+fromSeqNo);
+		log4j.debug("DBI#loadFileRequests fromSeqNo:" + fromSeqNo);
 		Connection conn = null;
 		Statement stmt = null;
 
@@ -4652,7 +4956,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			}
 		} catch (SQLException ex) {
 
-			log4j.error("DBI#loadFileRequests ERROR " , ex);
+			log4j.error("DBI#loadFileRequests ERROR ", ex);
 			// Rethrow the exception
 
 			throw new DBException(ex.getMessage());
@@ -4690,7 +4994,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			MultipleFileRequest tranReq) throws DBException {
 
 		// Load a transaction request from the transaction loader queue
-		log4j.debug("DBI#loadTransactionRequest MultipleFileRequest:"+tranReq);
+		log4j.debug("DBI#loadTransactionRequest MultipleFileRequest:" + tranReq);
 		Connection conn = null;
 		Statement stmt = null;
 
@@ -4733,7 +5037,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		} catch (SQLException ex) {
 
 			// DEBUG
-			log4j.error("DBI#loadTransactionRequest ERROR " , ex);
+			log4j.error("DBI#loadTransactionRequest ERROR ", ex);
 
 			// Rethrow the exception
 
@@ -4809,8 +5113,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			Timestamp endDate = rs.getTimestamp("EndDate");
 
 			retDetails = new RetentionDetails(fid,
-					startDate != null ? startDate.getTime() : -1L, endDate
-							.getTime());
+					startDate != null ? startDate.getTime() : -1L,
+					endDate.getTime());
 		}
 
 		// Return the retention expiry date/time
@@ -4891,16 +5195,16 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		// Create the prepared statements for accessing the transaction request
 		// queue database
 
-//		m_tranStmt = m_dbConn
-//				.prepareStatement("INSERT INTO "
-//						+ getTransactionTableName()
-//						+ "(FileId,StreamId,ReqType,TranId,TempFile,VirtualPath,Attribs) VALUES (?,?,?,?,?,?,?);");
+		// m_tranStmt = m_dbConn
+		// .prepareStatement("INSERT INTO "
+		// + getTransactionTableName()
+		// +
+		// "(FileId,StreamId,ReqType,TranId,TempFile,VirtualPath,Attribs) VALUES (?,?,?,?,?,?,?);");
 		m_tranStmt = m_dbConn
-		.prepareStatement("REPLACE INTO "
-				+ getTransactionTableName()
-				+ "(FileId,StreamId,ReqType,TranId,TempFile,VirtualPath,Attribs) VALUES (?,?,?,?,?,?,?);");
-		
-		
+				.prepareStatement("REPLACE INTO "
+						+ getTransactionTableName()
+						+ "(FileId,StreamId,ReqType,TranId,TempFile,VirtualPath,Attribs) VALUES (?,?,?,?,?,?,?);");
+
 	}
 
 	/**
@@ -4951,7 +5255,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		} catch (SQLException ex) {
 
 			// DEBUG
-			log4j.error("DBI#getFileDataDetails ERROR " , ex);
+			log4j.error("DBI#getFileDataDetails ERROR ", ex);
 			// Rethrow the exception
 
 			throw new DBException(ex.getMessage());
@@ -4974,9 +5278,9 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 		// If the file details are not valid throw an exception
 
-		if (dbDetails == null)
-		{
-			log4j.error("Failed to load file details for " + fileId + ":" + streamId);
+		if (dbDetails == null) {
+			log4j.error("Failed to load file details for " + fileId + ":"
+					+ streamId);
 			throw new DBException("Failed to load file details for " + fileId
 					+ ":" + streamId);
 		}
@@ -5007,40 +5311,134 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 * @throws DBException
 	 * @throws IOException
 	 */
-	public int loadFileData(int fileId, int streamId, FileSegment fileSeg,String shareName)
-			throws DBException, IOException {
-		log4j.debug("DBI#loadFileData time:" + System.currentTimeMillis() + " fileId:" + fileId + ", streamId:" + streamId + ", fileSeq tmpFile:" + fileSeg.getTemporaryFile());
+	public int loadFileData(int fileId, int streamId, FileSegment fileSeg,
+			String shareName) throws DBException, IOException {
+		log4j.debug("DBI#loadFileData time:" + System.currentTimeMillis()
+				+ " fileId:" + fileId + ", streamId:" + streamId
+				+ ", fileSeq tmpFile:" + fileSeg.getTemporaryFile());
 		// Open the temporary file
-//		FileOutputStream fileOut = new FileOutputStream(fileSeg .getTemporaryFile());
+		// FileOutputStream fileOut = new FileOutputStream(fileSeg
+		// .getTemporaryFile());
 		// Update the segment status
 		fileSeg.setStatus(FileSegmentInfo.Loading);
 		// DEBUG
 		long startTime = System.currentTimeMillis();
 		// Load the file data fragments
-		String FileSysTableName = FileSysTable_COMMFILE;
-		String FileRevisionTableName = FileRevisionTable_COMMFILE;
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-			FileSysTableName = FileSysTable_MYFILE;
-			FileRevisionTableName = FileRevisionTable_MYFILE;
-		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-			FileSysTableName = FileSysTable_COMMFILE;
-			FileRevisionTableName = FileRevisionTable_COMMFILE;
-		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-		{
-			FileSysTableName = FileSysTable_SHAREFILE;
-			FileRevisionTableName = FileRevisionTable_SHAREFILE;
-		}
+		String FileRevisionTableName = getRevisionTableName(shareName);
 
+		String FileSysTableName = getFileSysTableName(shareName);
+		
 		Connection conn = null;
 		Statement stmt = null;
 		try {
 			// Get a connection to the database, create a statement
 			conn = getConnection();
 			stmt = conn.createStatement();
-			String sql = "SELECT id,storePath,rollPath,lastModified,size FROM " +FileRevisionTableName + " WHERE status>=0 AND fileId = " + fileId + " ORDER BY revision DESC,id DESC";// 只查有效的版本
+			
+			String sql2 = "SELECT name,pid,status FROM "
+					+ FileSysTableName
+					+ " WHERE status>=-1 AND id = " + (fileId)
+					+ " ORDER BY revision DESC limit 1";// 只查有效的版本
+			//log4j.debug("[mySQL] Load file data SQL: " + sql2);
+			ResultSet rs2 = stmt.executeQuery(sql2);
+			// Load the file data from the main file record(s)
+			int pid = 0;
+			int status = 0; // TODO _+__   是这里呢？ 还是getFileInfo那里设置好？
+			String name = "";
+			if (rs2.next()) {
+				// Access the file data
+				pid = rs2.getInt("pid");
+				status = rs2.getInt("status");
+				name = rs2.getString("name");
+				
+				if (name.startsWith("~")) {
+					log4j.debug("[mySQL] Load file name : " + name);
+				}
+			}
+			rs2.close();
+			
 
+			String ext = DiskUtil.getExt(name);
+			if (isOfficeFile(ext)) {
+				sql2 = "SELECT id,latestFileId,lastModified,size FROM "
+				+ FileSysTableName
+				+ " WHERE status>=0 AND pid = " + (pid) + " AND name = '" + (name)
+				+ "' ORDER BY revision DESC limit 1";// 只查有效的版本
+				
+				int latestFileId = 0;
+				// Find the data fragments for the file, check if the file is stored
+				// in a Jar
+//				log4j.debug("[mySQL] Load file data SQL: " + sql2);
+				rs2 = stmt.executeQuery(sql2);
+				// Load the file data from the main file record(s)
+				if (rs2.next()) {
+					// Access the file data
+					latestFileId = rs2.getInt("latestFileId");
+					if (latestFileId>fileId || latestFileId<=fileId) {
+						if (latestFileId > 0) {
+							fileId = latestFileId;
+						}
+					}
+				}
+			}
+			
+//			fileId = 323000;
+			// 为什么要查询 FileRevisionTableName， 而不是 FileSysTableName !!??
+
+			if (fileSeg.getTemporaryFile()!=null && fileRenamed != null) {
+				
+//				if (fileSeg.getTemporaryFile().endsWith(fileRenamed)) {	
+//					if (getBaseFileId() > 0) {
+						//应该是第一次打开文件， 需要根据fileId查询出最新版，然后使用新的 fileId打开对应最新版的内容。
+//						
+//						log4j.debug(" baseFileId:" + getBaseFileId() + "/fileId:" + fileId+ "/fileSeg.getTemporaryFile():" + fileSeg.getTemporaryFile());
+						//fileId = getBaseFileId();
+//						String renameRevisionSql = "UPDATE "
+//								+ FileRevisionTableName + " SET fileId = " + getBaseFileId()
+//								+ " WHERE revision >= "+this.oldRevision+" AND name = '" + newName+"'";// + "  LIMIT 1";
+//						log4j.debug("[mySQL] Rename Revision  SQLAAAAAAAAA: "
+//								+ renameRevisionSql.toString());
+//						
+//						int executeUpdate = stmt.executeUpdate(renameRevisionSql);
+//						if (executeUpdate == 0) {// 文件版本改名
+//							log4j.error("DBI#renameFileRecord 修改当前文件版本名称失败! fileId="
+//									+ fileId);
+//						}
+//						
+//						
+//						
+//						java.util.Date nowDate = new java.util.Date();
+//						String fSql = "update "
+//								+ FileSysTableName
+//								+ " set md5 ='"
+//								+ "md51"
+//								+ "',lastModified="
+//								+ nowDate.getTime()
+//								+ ",status =0 WHERE status>-2 AND id ="
+//								+ fileId;
+//						log4j.debug("[mySQL] UPDATE file :\n"
+//								+ fSql);
+//						if (stmt.executeUpdate(fSql) > 0) {
+//							log4j.debug("MySQLDBLInterface.load and save()");
+//						}
+//						
+//						
+//						setBaseFileId(-1);
+//						
+//					}
+//				}
+			}
+
+			String sql = "SELECT id, fileId ,storePath,rollPath,lastModified,size FROM "
+					+ FileRevisionTableName
+					+ " WHERE status>=-1" 
+					//+ " AND name =  '" + this.fileRenamed 
+					+ " AND baseFileId = " + (fileId)
+					+ " ORDER BY revision DESC,id DESC limit 1";// 只查有效的版本
+			
 			String rollPath = null;
 			String storePath = null;
+			long rfileId = 0;
 			long revisionId = 0;
 			long lastModified = 0L;
 			// Find the data fragments for the file, check if the file is stored
@@ -5050,109 +5448,162 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			// Load the file data from the main file record(s)
 			if (rs.next()) {
 				// Access the file data
+				rfileId = rs.getLong("fileId");
 				rollPath = rs.getString("rollPath");
 				storePath = rs.getString("storePath");
 				revisionId = rs.getLong("id");
 				lastModified = rs.getLong("lastModified");
-				
+
 				String filePath = rollPath + storePath;// not storePath+rollPath
 				File rollFile = null;
-				if(StringUtils.isNotEmpty(filePath))
-				{
+				if (StringUtils.isNotEmpty(filePath)) {
 					rollFile = new File(filePath);
-					if(null ==rollFile || (null != rollFile && rollFile.exists() == false) || !storePath.endsWith(".LFS"))
-					{
-						if(StringUtils.isNotEmpty(storePath))
-							rollFile = new File(storePath);//临时文件地址
+					if (null == rollFile
+							|| (null != rollFile && rollFile.exists() == false)
+							|| !(storePath.endsWith(".LFS") || storePath
+									.endsWith(".LFN"))) {
+						if (StringUtils.isNotEmpty(storePath))
+							rollFile = new File(storePath);// 临时文件地址
 					}
 				}
-				
-				File uFile = new File(fileSeg.getTemporaryFile());
-				log4j.debug("DBI#loadFileData加载文件内容 fileId:" + fileId + ", revisionId:"
-						+ revisionId + ", filePath:" + filePath
-						+ ", fileSeq tmpFile:" + fileSeg.getTemporaryFile()+" ,rollFile.exists():"+rollFile.exists());
-				if (null ==rollFile || (null != rollFile && rollFile.exists() == false)) {
-					log4j.error("DBI#loadFileData File not exists , fileId:"
-							+ fileId + ",filePath: " + filePath+" , uFile.exists():"+uFile.exists()+", uFile.length():"+uFile.length());
-//					return DBFileLoader.StsError;// 失败
-//					throw new IOException("文件内容不存在!"); 
-//					if(uFile.exists() && uFile.length()>0)
-					if(uFile.exists())
-					{
-						//用存在的临时文件
-						log4j.debug("DBI#loadFileData记录文件不存在，用存在的临时文件:"+fileSeg.getTemporaryFile());
-					}
-					else
-					{
-						log4j.debug("DBI#loadFileData加载文件内容失败! 文件已经删除:"+fileSeg.getTemporaryFile());
-						return DBFileLoader.StsError;// 失败
-					}
-				}
-				else if(storePath.endsWith(".LFS"))
-				{
-					if(uFile.exists() && uFile.length()>0 && uFile.lastModified()>lastModified)
-					{
-						log4j.debug("DBI#loadFileData临时文件存在且较新，暂不重新加载..");
-					}
-					else
-					{
-					AESUtil.decryptFile(rollFile, uFile);
-					log4j.debug("DBI#loadFileData加密文件转换完成; uFile:" + uFile.exists() + " , length:"
-								+ uFile.length() + " , fileSeg.fileExists:"
-								+ fileSeg.fileExists() + " ,isDataAvailable:"
-								+ fileSeg.isDataAvailable() + ", sfileLength:"
-								+ fileSeg.getFileLength());
-					}
-				}
-				else
-				{
-					if(uFile.exists() && uFile.length()>0 && uFile.lastModified()>rollFile.lastModified())
-					{
-						log4j.debug("DBI#loadFileData临时文件存在且较新，暂不重新加载..");
-					}
-					else
-					{
-						DiskUtil.copySingeFile(rollFile, uFile);
-						log4j.debug("DBI#loadFileData加载未处理完的缓存文件 , exists:"+uFile.exists()+", length:"+uFile.length());
-					}
-				}			
-				long endTime = System.currentTimeMillis();
-				log4j.debug("[mySQL] Loaded fid=" + fileId + ", stream=" + streamId
-						+ ", frags=" + ", time=" + (endTime - startTime) + "ms");
 				
 
-				// Signal that the file data is available
-				fileSeg.setReadableLength(uFile.length());//设置大小
-				fileSeg.signalDataAvailable();//设置为可用
-				
-				log4j.debug("fileSeg.flush(); fileSeg.fileExists:" + fileSeg.fileExists() + " ,isDataAvailable:"
-						+ fileSeg.isDataAvailable() + ", sfileLength:" + fileSeg.getFileLength()+" ,uFileLength:"+uFile.length());
-				return DBFileLoader.StsSuccess;// 成功
-			}
-			else
-			{
-				if(fileId==-99)
+				File uFile = new File(fileSeg.getTemporaryFile());
+				log4j.debug("DBI#loadFileData加载文件内容 fileId:" + fileId
+						+ ", revisionId:" + revisionId + ", filePath:"
+						+ filePath + ", fileSeq tmpFile:"
+						+ fileSeg.getTemporaryFile() + " ,rollFile.exists():"
+						+ rollFile.exists());
+				if (null == rollFile
+						|| (null != rollFile && rollFile.exists() == false)) {
+					log4j.error("DBI#loadFileData File not exists , fileId:"
+							+ fileId + ",filePath: " + filePath
+							+ " , uFile.exists():" + uFile.exists()
+							+ ", uFile.length():" + uFile.length());
+					// return DBFileLoader.StsError;// 失败
+					// throw new IOException("文件内容不存在!");
+					// if(uFile.exists() && uFile.length()>0)
+					if (uFile.exists()) {
+						// 用存在的临时文件
+						log4j.debug("DBI#loadFileData记录文件不存在，用存在的临时文件:"
+								+ fileSeg.getTemporaryFile());
+					} else {
+						log4j.debug("DBI#loadFileData加载文件内容失败! 文件已经删除:"
+								+ fileSeg.getTemporaryFile());
+						return DBFileLoader.StsError;// 失败
+					}
+				} else if (storePath.endsWith(".LFS")
+						|| storePath.endsWith(".LFN"))// 如果是.LFS或.LFN表示是LFS存储文件
 				{
+					// if(uFile.exists() && uFile.length()>0 &&
+					// uFile.lastModified()>lastModified)
+					// {
+					// log4j.debug("DBI#loadFileData临时文件存在且较新，暂不重新加载..");
+					// }
+					// else
+					// {
+					// 新版本，直接从缓存加载会报错，所以重新加载(缓存中的uFile可能内容不正常)
+					// log4j.debug("DBI#loadFileData临时文件存在且较新，暂不重新加载..");
+					AESUtil.decryptFile(rollFile, uFile);
+					log4j.debug("DBI#loadFileData加密文件转换完成; uFile:"
+							+ uFile.exists() + " , length:" + uFile.length()
+							+ " , fileSeg.fileExists:" + fileSeg.fileExists()
+							+ " ,isDataAvailable:" + fileSeg.isDataAvailable()
+							+ ", sfileLength:" + fileSeg.getFileLength());
+					
+					if (DBUtil.SUPPORT_EXT.contains(ext) && !ext.equals("txt")) {
+						
+//						lock();
+//						int lockedByUser = 0;
+//						sql2 = "SELECT lockedByUser FROM "
+//						+ FileSysTableName
+//						+ " WHERE status>=-1 AND id = " + (rfileId) + " AND name = '" + (name)
+//						+ "' ORDER BY revision DESC limit 1";// 只查有效的版本
+//						
+//						rs2 = stmt.executeQuery(sql2);
+//						if (rs2.next()) {
+//							lockedByUser = rs2.getInt("lockedByUser");
+//						}
+//						if (lockedByUser == 0) {
+//							
+//							log4j.debug("MySQLDBLInterface.loadFileData()");
+//							sql2 = "UPDATE "+ FileSysTableName + " SET lockedByUser = 1, islock = 1 "
+//							+ " WHERE status>=-1 AND id = " + (rfileId) + " AND name = '" + (name)
+//							+ "' limit 1";// 只查有效的版本
+//							int executeUpdate = stmt.executeUpdate(sql2);
+//							
+//							if (executeUpdate == 0) {
+//								log4j.debug("111");
+//							}
+//							
+//						}
+					}
+					
+					// }
+				} else {
+					// if(uFile.exists() && uFile.length()>0 &&
+					// uFile.lastModified()>rollFile.lastModified())
+					// {
+					// log4j.debug("DBI#loadFileData临时文件存在且较新，暂不重新加载..");
+					// }
+					// else
+					// {
+					// 新版本，直接从缓存加载会报错，所以重新加载(缓存中的uFile可能内容不正常)
+					// log4j.debug("DBI#loadFileData临时文件存在且较新，暂不重新加载..");
+					DiskUtil.copySingeFile(rollFile, uFile);
+					log4j.debug("DBI#loadFileData加载未处理完的缓存文件 , exists:"
+							+ uFile.exists() + ", length:" + uFile.length());
+					// }
+				}
+				long endTime = System.currentTimeMillis();
+				log4j.debug("[mySQL] Loaded fid=" + fileId + ", stream="
+						+ streamId + ", frags=" + ", time="
+						+ (endTime - startTime) + "ms");
+
+				// Signal that the file data is available
+				fileSeg.setReadableLength(uFile.length());// 设置大小
+				fileSeg.signalDataAvailable();// 设置为可用
+				//fileSeg.setStatus(status);
+
+				log4j.debug("fileSeg.flush(); fileSeg.fileExists:"
+						+ fileSeg.fileExists() + " ,isDataAvailable:"
+						+ fileSeg.isDataAvailable() + ", sfileLength:"
+						+ fileSeg.getFileLength() + " ,uFileLength:"
+						+ uFile.length());
+				return DBFileLoader.StsSuccess;// 成功
+			} else {
+				if (fileId == -99) {
 					log4j.debug("加载文件云.url文件数据");
 					int userId = 0;
-					FileUtil.createURLFile(getBaseUrl(conn), fileSeg.getTemporaryFile(),userId);
+					FileUtil.createURLFile(getBaseUrl(conn),
+							fileSeg.getTemporaryFile(), userId);
 					File uFile = new File(fileSeg.getTemporaryFile());
-					fileSeg.setReadableLength(uFile.length());//设置大小
-					fileSeg.signalDataAvailable();//设置为可用
+					fileSeg.setReadableLength(uFile.length());// 设置大小
+					fileSeg.signalDataAvailable();// 设置为可用
 				}
-				log4j.error("DBI#loadFileData ERROR ,not file record from DB ");
+
+				// 清理一下文件 ，可能是~$xxx.doc文件，从web,或客户端编辑后not file record from DB
+				// Set the file status to indicate error to any client reading
+				// threads
+				fileSeg.setStatus(FileSegmentInfo.Error, false);
+				// Wakeup any threads waiting on data for this file
+				// fileSeg.setReadableLength(0L);
+				// fileSeg.signalDataAvailable();
+				// // Delete the temporary file
+				// fileSeg.deleteTemporaryFile();
+				log4j.error("DBI#loadFileData ERROR ,not file record from DB "
+						+ fileSeg);
 				return DBFileLoader.StsError;// 失败
-			}			
+			}
 		} catch (SQLException ex) {
 			// DEBUG
-			log4j.error("DBI#loadFileData ERROR " , ex);
+			log4j.error("DBI#loadFileData ERROR ", ex);
 			// Rethrow the exception
 			throw new DBException(ex.getMessage());
 		} catch (Exception e) {
 			log4j.error("DBI#loadFileData*****解密加载文件异常");
 			e.printStackTrace();
-		}
-		finally {
+		} finally {
 			// Check if a statement was allocated
 			if (stmt != null) {
 				try {
@@ -5165,13 +5616,13 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			if (conn != null)
 				releaseConnection(conn);
 			// Close the output file
-//			if (fileOut != null) {
-//				try {
-//					fileOut.close();
-//				} catch (Exception ex) {
-//					log4j.error(ex);
-//				}
-//			}
+			// if (fileOut != null) {
+			// try {
+			// fileOut.close();
+			// } catch (Exception ex) {
+			// log4j.error(ex);
+			// }
+			// }
 		}
 
 		// // Signal that the file data is available
@@ -5263,7 +5714,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		} catch (SQLException ex) {
 
 			// DEBUG
-			log4j.error("DBI#loadJarData ERROR " , ex);
+			log4j.error("DBI#loadJarData ERROR ", ex);
 			// Rethrow the exception
 
 			throw new DBException(ex.getMessage());
@@ -5433,7 +5884,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		} catch (SQLException ex) {
 
 			// DEBUG
-			log4j.error("DBI#saveFileData ERROR " , ex);
+			log4j.error("DBI#saveFileData ERROR ", ex);
 
 			// Rethrow the exception
 
@@ -5489,35 +5940,26 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 * @throws DBException
 	 * @throws IOException
 	 */
-	public int saveJarData(ArrayList<File> jarFileList, DBDataDetailsList fileList,String shareName)
-			throws DBException, IOException {
-		log4j.debug("DBI#saveJarData, time:" + System.currentTimeMillis() +" ; jarFileList:"+jarFileList+" ;fileList:"+fileList);
+	public int saveJarData(ArrayList<File> jarFileList,
+			DBDataDetailsList fileList, String shareName) throws DBException,
+			IOException {
+		log4j.debug("DBI#saveJarData, time:" + System.currentTimeMillis()
+				+ " ; jarFileList:" + jarFileList + " ;fileList:" + fileList);
 		// Write the Jar file to the blob field in the Jar data table
 		Connection conn = null;
-//		PreparedStatement istmt = null;
+		// PreparedStatement istmt = null;
 		Statement stmt = null;
-		
-		String FileSysTableName = FileSysTable_COMMFILE;
-		String FileRevisionTableName = FileRevisionTable_COMMFILE;
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-			FileSysTableName = FileSysTable_MYFILE;
-			FileRevisionTableName = FileRevisionTable_MYFILE;
-		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-			FileSysTableName = FileSysTable_COMMFILE;
-			FileRevisionTableName = FileRevisionTable_COMMFILE;
-		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-		{
-			FileSysTableName = FileSysTable_SHAREFILE;
-			FileRevisionTableName = FileRevisionTable_SHAREFILE;
-		}
+
+		String FileSysTableName = getFileSysTableName(shareName);
+		String FileRevisionTableName = getRevisionTableName(shareName);
 
 		int jarId = -1;
-		
+
 		String rootPath = "";
 		String description = "";
 		int userId = 0;
 		java.util.Date nowDate = new java.util.Date();
-		String sql= "";
+		String sql = "";
 		int fileId = -1;
 		String fileName = "";
 		String alreadyIds = "";
@@ -5525,55 +5967,43 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			// Get a connection to the database
 			conn = getConnection();
 			stmt = conn.createStatement();
-		
-			Map needDelMap=new HashMap();                
-			
+
+			Map needDelMap = new HashMap();
+
 			for (int i = 0; i < fileList.numberOfFiles(); i++) {
 
 				// Get the current file details
 				DBDataDetails dbDetails = fileList.getFileAt(i);
-				
+
 				fileId = dbDetails.getFileId();
-				int fid = fileId;//用于处理fileId = oldFileId后，更新最后版本问题
+				int fid = fileId;// 用于处理fileId = oldFileId后，更新最后版本问题
 				int oldFileId = 0;
-				
+
 				File uFile = jarFileList.get(i);
-				if(null != uFile && uFile.exists())
-				{
-				/*	FileParser fp = new FileParser(uFile, fileName);// 提取内容
-					description = fp.getDescription();
-					description = checkNameForSpecialChars(description);//替换特殊符
-*/					description = this.getDescription(uFile, fileName);
+				if (null != uFile && uFile.exists()) {
+					/*
+					 * FileParser fp = new FileParser(uFile, fileName);// 提取内容
+					 * description = fp.getDescription(); description =
+					 * checkNameForSpecialChars(description);//替换特殊符
+					 */description = this.getDescription(uFile, fileName);
 					fileName = uFile.getName();
 					String fileMD5 = MD5Util.getFileMD5(uFile);// 上传文件的MD5值
 					boolean fileExist = false;
-//					int revisionCount = 1;
+					// int revisionCount = 1;
 					long pid = 0;
+
 					
-					String archiveFilePath = DiskUtil.getArchiveFilePath(fileMD5);
-					if(StringUtils.isEmpty(rootPath))
-					{
-						//重新获得rollPath;
-						try {
-							rootPath = this.getRollPath(pid, uFile.length(), shareName,conn);// 获得存储池卷目录
-						} catch (DBException e) {
-							log4j.error("Error 获得存储池卷目录失败 rootPath= " + rootPath);
-							throw new DBException(e.getMessage());
-						} catch (DiskFullException e) {
-							log4j.error("Roll Disk is Full ,rootPath : " + rootPath);
-							throw new DiskFullException( "Roll Disk is Full ,rootPath : " + rootPath);
-						}
-					}
-					
+
 					synchronized (this)// 暂时改为同步。 避免产生重复文件
 					{
 						// 如果已经存在且内容相同则不更新，直接成功
-						String existMd5 ="";
+						String existMd5 = "";
 						long existSize = 0;
 						int existStatus = 0;
 						long existRevision = 0;
-						
-						sql = "SELECT userId,id,pid,name,status,revisionCount,revision,md5,size FROM " + FileSysTableName + " WHERE id = " + fileId;
+
+						sql = "SELECT userId,id,pid,name,status,revisionCount,revision,md5,size FROM "
+								+ FileSysTableName + " WHERE id = " + fileId;
 						log4j.debug("[mySQL] select status SQL: " + sql);
 						ResultSet rs = stmt.executeQuery(sql);
 						if (rs.next()) {
@@ -5581,23 +6011,29 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 							int status = rs.getInt("status");
 							String fname = rs.getString("name");
 							pid = rs.getLong("pid");
-//							revisionCount = rs.getInt("revisionCount");
-							
+							// revisionCount = rs.getInt("revisionCount");
+
 							// 如果已经存在且内容相同则不更新，直接成功
 							existMd5 = rs.getString("md5");
 							existSize = rs.getLong("size");
 							existStatus = rs.getInt("status");
-							existRevision = rs.getLong("revision");//查询被更新的版本
-							
+							existRevision = rs.getLong("revision");// 查询被更新的版本
+
 							if (status < 0) {
 								// 已经删除掉新的，使用旧的fileId，则获得旧的id
-								sql = "SELECT id,pid,name,status,revisionCount,revision,md5,size FROM " + FileSysTableName + " WHERE status>=0 AND pid = " + pid + " AND LOWER(name)=LOWER('" + checkNameForSpecialChars(fname)  + "') ORDER BY revision DESC,id ASC";
+								sql = "SELECT id,pid,name,status,revisionCount,revision,md5,size FROM "
+										+ FileSysTableName
+										+ " WHERE status>=0 AND pid = "
+										+ pid
+										+ " AND name='"
+										+ checkNameForSpecialChars(fname)
+										+ "' ORDER BY revision DESC,id ASC";
 								log4j.debug("[mySQL] old file id SQL: " + sql);
 								ResultSet rs2 = stmt.executeQuery(sql);
-								
+
 								if (rs2.next()) {
 									oldFileId = rs2.getInt("id");
-									
+
 									// 如果已经存在且内容相同则不更新，直接成功
 									existMd5 = rs2.getString("md5");
 									existSize = rs2.getLong("size");
@@ -5607,14 +6043,19 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 								int seconds = 0;// 时间限制3秒
 								while (oldFileId == 0 && seconds < 3)// 延时１秒取状态，最多重复5次
 								{
-									log4j.info("DBI#saveJarData,fileList["+i+"] fileId:" + fileId + ",重新查询到的fileId, 第" + seconds + "次，等待1秒取数据");
+									log4j.info("DBI#saveJarData,fileList[" + i
+											+ "] fileId:" + fileId
+											+ ",重新查询到的fileId, 第" + seconds
+											+ "次，等待1秒取数据");
 									try {
 										Thread.sleep(500);
-										log4j.debug("[mySQL] old file id[" + seconds + "] SQL: " + sql);
-										rs2 = stmt.executeQuery(sql.replace("status>=0", "status>=-1"));
+										log4j.debug("[mySQL] old file id["
+												+ seconds + "] SQL: " + sql);
+										rs2 = stmt.executeQuery(sql.replace(
+												"status>=0", "status>=-1"));
 										if (rs2.next()) {
 											oldFileId = rs2.getInt("id");
-											
+
 											// 如果已经存在且内容相同则不更新，直接成功
 											existMd5 = rs2.getString("md5");
 											existSize = rs2.getLong("size");
@@ -5625,7 +6066,9 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 											break;
 										} else {
 											if (seconds > 4) {
-												log4j.error("DBI#saveJarData,fileList["+i+"]重新查询到的fileId，等待时间过长!");
+												log4j.error("DBI#saveJarData,fileList["
+														+ i
+														+ "]重新查询到的fileId，等待时间过长!");
 											}
 										}
 									} catch (Exception e) {
@@ -5633,90 +6076,112 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 									}
 								}
 								rs2.close();
-								log4j.debug("DBI#saveJarData,fileList["+i+"]本文件已经删除,fileId:" + fileId + "，重新查询正确的文件ID:" + oldFileId);
+								log4j.debug("DBI#saveJarData,fileList[" + i
+										+ "]本文件已经删除,fileId:" + fileId
+										+ "，重新查询正确的文件ID:" + oldFileId);
 								if (oldFileId > 0) {
-									log4j.debug("DBI#saveJarData,fileList["+i+"]"+alreadyIds+"########:"+alreadyIds.contains(","+oldFileId+","));
-									if(alreadyIds.contains(","+oldFileId+","))
-									{
-										log4j.warn("DBI#saveJarData,fileList["+i+"] 更新过,fileId:" + fileId);
-//										continue;//跳过本次循环
-									}
-									else
-									{
+									log4j.debug("DBI#saveJarData,fileList["
+											+ i
+											+ "]"
+											+ alreadyIds
+											+ "########:"
+											+ alreadyIds.contains(","
+													+ oldFileId + ","));
+									if (alreadyIds.contains("," + oldFileId
+											+ ",")) {
+										log4j.warn("DBI#saveJarData,fileList["
+												+ i + "] 更新过,fileId:" + fileId);
+										// continue;//跳过本次循环
+									} else {
 										fileId = oldFileId;
 									}
 								} else {
-									log4j.error("DBI#saveJarData,fileList["+i+"] 已经删除状态的,fileId:" + fileId + "，未得到正确的旧文件ID:" + oldFileId);
+									log4j.error("DBI#saveJarData,fileList[" + i
+											+ "] 已经删除状态的,fileId:" + fileId
+											+ "，未得到正确的旧文件ID:" + oldFileId);
 								}
 							}
 						}
 						rs.close();
+
+						String archiveFilePath = DiskUtil
+								.getArchiveFilePath(fileMD5);
+						if (StringUtils.isEmpty(rootPath)) {
+							// 重新获得rollPath;
+							try {
+								rootPath = this.getRollPath(pid, uFile.length(),userId,shareName, conn);// 获得存储池卷目录
+							} catch (DBException e) {
+								log4j.error("Error 获得存储池卷目录失败 rootPath= "
+										+ rootPath);
+								throw new DBException(e.getMessage());
+							} catch (DiskFullException e) {
+								log4j.error("Roll Disk is Full ,rootPath : "
+										+ rootPath);
+								throw new DiskFullException(
+										"Roll Disk is Full ,rootPath : " + rootPath);
+							}
+						}
 						
-//						if (existStatus > -1 && existSize == uFile.length() && fileMD5.length()==32 && fileMD5.equalsIgnoreCase(existMd5) && uFile.length() > 0) {
-//							String fSql = "update " + getFileSysTableName() + " set lastModified=" + nowDate.getTime() + " WHERE id =" + fileId;
-//							log4j.debug("[mySQL] 更新存在的文件 SQL: " + fSql);
-//							stmt.executeUpdate(fSql);
-//							// DEBUG
-//							log4j .debug("DBI#saveJarData,fileList["+i+"] 文件已经存在且内容相同 ,filename= " + fileName 	+ ",size=" 	+ uFile.length() + ",fileMD5=" + fileMD5);
-//							fileExist = true;
-//							// 不能直接返回，否则后续队列会跳过执行
-//						} else {
-//							log4j.info("DBI#saveJarData,fileList["+i+"] 文件存在但内容不等 ,filename= " + fileName + ",existStatus:" + existStatus + ",size:" + existSize + "=" + uFile.length() 	+ ",fileMD5:" + existMd5 + "=" + fileMD5);
-//							fileExist = false;
-////							revisionCount =revisionCount+1;
-//							// 因提前插入了版本，所以不用更新此值
-//						}
-						
-						if (!fileExist) {							
+						if (!fileExist) {
 							if (StringUtils.isEmpty(fileMD5)) {
 								fileMD5 = "md51";
-							}
-							else
-							{
-								//MD5去重
-								String resultMd5 = this.getMD5(fileMD5, rootPath, archiveFilePath, uFile,FileRevisionTableName,FileSysTableName,conn);
-								if(resultMd5 != "" )
-								{
+							} else {
+								// MD5去重
+								String resultMd5 = this.getMD5(fileMD5,
+										rootPath, archiveFilePath, uFile,
+										FileRevisionTableName,
+										FileSysTableName, conn);
+								if (resultMd5 != "") {
 									String[] root = resultMd5.split(",");
 									rootPath = root[0];
 									archiveFilePath = root[1];
 								}
-								/*String Md5Sql = "SELECT storePath,rollPath FROM  "+FileRevisionTableName+" WHERE md5 = '"+fileMD5+"' ORDER BY id DESC";
-								ResultSet md5Rs = stmt.executeQuery(Md5Sql);
-								if(md5Rs.next())
-								{
-									archiveFilePath = md5Rs.getString("storePath");
-									rootPath = md5Rs.getString("rollPath");
-									md5Rs.close();
-								}
-								else
-								{
-									File saveFile = new File(rootPath + archiveFilePath); // 目标存储文件
-									try {
-										AESUtil.encryptFile(uFile, saveFile);
-									} catch (Exception e) {
-											log4j.error("DBI#saveFileArchiveerror ; fileId:" 	+ fileId + ", ufile:" + uFile.getAbsolutePath() + "  ; " + e.getMessage());
-									}
-								}*/
+								/*
+								 * String Md5Sql =
+								 * "SELECT storePath,rollPath FROM  "
+								 * +FileRevisionTableName
+								 * +" WHERE md5 = '"+fileMD5
+								 * +"' ORDER BY id DESC"; ResultSet md5Rs =
+								 * stmt.executeQuery(Md5Sql); if(md5Rs.next()) {
+								 * archiveFilePath =
+								 * md5Rs.getString("storePath"); rootPath =
+								 * md5Rs.getString("rollPath"); md5Rs.close(); }
+								 * else { File saveFile = new File(rootPath +
+								 * archiveFilePath); // 目标存储文件 try {
+								 * AESUtil.encryptFile(uFile, saveFile); } catch
+								 * (Exception e) {
+								 * log4j.error("DBI#saveFileArchiveerror ; fileId:"
+								 * + fileId + ", ufile:" +
+								 * uFile.getAbsolutePath() + "  ; " +
+								 * e.getMessage()); } }
+								 */
 							}
-//							String maxRevisionSql = "SELECT max(id) as id FROM " + getFileRevisionTable() + " WHERE status>=0 AND fileId=" + fileId;
-							String maxRevisionSql = "SELECT max(revision) AS revision FROM " + FileRevisionTableName + " WHERE status>=0 AND fileId=" + fileId;
-							if(oldFileId>0)
-							{
-								maxRevisionSql = "SELECT max(revision) as revision FROM " + FileRevisionTableName + " WHERE status>=0  AND  fileId=" + oldFileId;
+							// String maxRevisionSql =
+							// "SELECT max(id) as id FROM " +
+							// getFileRevisionTable() +
+							// " WHERE status>=0 AND fileId=" + fileId;
+							String maxRevisionSql = "SELECT max(revision) AS revision FROM "
+									+ FileRevisionTableName
+									+ " WHERE status>=0 AND fileId=" + fileId;
+							if (oldFileId > 0) {
+								maxRevisionSql = "SELECT max(revision) as revision FROM "
+										+ FileRevisionTableName
+										+ " WHERE status>=0  AND  fileId="
+										+ oldFileId;
 							}
 							long maxRevision = 0;
-							log4j.debug("[mySQL] max maxRevision SQL: " + maxRevisionSql);
-							//此处需要增加 commonfilecache_value 的值 以保证版本不重复
+							log4j.debug("[mySQL] max maxRevision SQL: "
+									+ maxRevisionSql);
+							// 此处需要增加 commonfilecache_value 的值 以保证版本不重复
 							ResultSet rRs1 = stmt.executeQuery(maxRevisionSql);
 							int revisionCop = 0;
-							if(rRs1.next())
-							{
+							if (rRs1.next()) {
 								revisionCop = rRs1.getInt("revision");
 							}
 							rRs1.close();
-							
-							ResultSet rRs = stmt.executeQuery(findMaxRevision_hql);
+
+							ResultSet rRs = stmt
+									.executeQuery(findMaxRevision_hql);
 							if (rRs.next()) {
 								maxRevision = rRs.getInt("max_value");
 							}
@@ -5724,158 +6189,321 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 							if (StringUtils.isEmpty(fileMD5)) {
 								fileMD5 = "md51";
 							}
-							log4j.debug("\n***********************上传/更新文件***********************fileId:"+fileId+" ;revision:"+maxRevision);
+							
+							log4j.debug("\n***********************上传/更新文件***********************fileId:"
+									+ fileId + " ;revision:" + maxRevision);
 							String fSql = "";
 							try {
+								conn.setAutoCommit(false);
 								if (revisionCop > 0) {
 									// 更新
-//									sql = "UPDATE " + getFileRevisionTable() + " set status=0, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
-//											+ ",lastModified=" + nowDate.getTime() + ",revision=" + revision + ",revisionCount="
-//											+ revisionCount + ",description='" + description + "',rollPath='" + rootPath + "' WHERE revision=" + maxRevision;
-									if(existMd5.length()==32 && oldFileId==0)
-									{
-										if(alreadyIds.contains(","+oldFileId+","))
-										{
-											//更新过则不更新，否则旧文件可能会替换新文件
-										}
-										else
-										{
-											//复制
-											sql ="INSERT INTO "+FileRevisionTableName+" (fileid,name,tags,md5,size,lastModified,userId,revision,revisionCount,status,rollPath,storePath,description)" +
-												" SELECT distinct fileid, name,tags,md5,size,lastModified,userId,revision+1 as revision,revisionCount+1 as revisionCount, status,rollPath,storePath,description from jweb_commonfilerevision WHERE fileId = " + fileId+" AND revision=" + maxRevision;
-											log4j.debug("[mySQL]  UPDATE file 复制版本 :\n" + fSql);
+									// sql = "UPDATE " + getFileRevisionTable()
+									// + " set status=0, storePath='" +
+									// archiveFilePath + "',md5='" + fileMD5 +
+									// "',size=" + uFile.length()
+									// + ",lastModified=" + nowDate.getTime() +
+									// ",revision=" + revision +
+									// ",revisionCount="
+									// + revisionCount + ",rollPath='" + rootPath +
+									// "' WHERE revision=" + maxRevision;
+									if (existMd5.length() == 32
+											&& oldFileId == 0) {
+										if (alreadyIds.contains("," + oldFileId
+												+ ",")) {
+											// 更新过则不更新，否则旧文件可能会替换新文件
+										} else {
+											// 复制
+											sql = "INSERT INTO "
+													+ FileRevisionTableName
+													+ " (fileid,md5,size,lastModified,userId,revision,revisionCount,status,rollPath,storePath)"
+													+ " SELECT distinct fileid,md5,size,lastModified,userId,revision+1 as revision,revisionCount+1 as revisionCount, status,rollPath,storePath from jweb_commonfilerevision WHERE fileId = "
+													+ fileId + " AND revision="
+													+ maxRevision;
+											log4j.debug("[mySQL]  UPDATE file 复制版本 :\n"
+													+ fSql);
 											if (stmt.executeUpdate(sql) > 0) {
-												maxRevision +=1;
-												existRevision +=1;
-												fSql = "update " + FileSysTableName + " set revision="+maxRevision+",revisionCount=revisionCount+1 WHERE id =" + fileId;
-												log4j.debug("[mySQL] UPDATE file 更新版本号 :\n" + fSql);
+												maxRevision += 1;
+												existRevision += 1;
+												fSql = "update "
+														+ FileSysTableName
+														+ " set revision="
+														+ maxRevision
+														+ ",revisionCount=revisionCount+1 WHERE id ="
+														+ fileId;
+												log4j.debug("[mySQL] UPDATE file 更新版本号 :\n"
+														+ fSql);
 												stmt.executeUpdate(fSql);
 											}
 										}
 									}
-									//注意此处:fileId=fid
-//									sql = "UPDATE " + getFileRevisionTable() + " set status=0, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
-//									+ ",lastModified=" + nowDate.getTime() + ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE fileId=" + fid +" AND revision=" + maxRevision;
-									sql = "UPDATE " + FileRevisionTableName + " SET status=0, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
-									+ ",lastModified=" + nowDate.getTime() + ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE  fileId=" + fid;//不需要用revision区分
-									if(fileName.startsWith("~$"))
-									{
-										//不更新状态
-										this.deleteId(fid, FileRevisionTableName,FileSysTableName, conn);
-										sql = "UPDATE " + FileRevisionTableName + " set storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
-										+ ",lastModified=" + nowDate.getTime() + ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE fileId=" + fid;
+									// 注意此处:fileId=fid
+									// sql = "UPDATE " + getFileRevisionTable()
+									// + " set status=0, storePath='" +
+									// archiveFilePath + "',md5='" + fileMD5 +
+									// "',size=" + uFile.length()
+									// + ",lastModified=" + nowDate.getTime() +
+									// ",rollPath='" + rootPath +
+									// "' WHERE fileId=" + fid +" AND revision="
+									// + maxRevision;
+									sql = "UPDATE "
+											+ FileRevisionTableName
+											+ " SET status=0, storePath='"
+											+ archiveFilePath
+											+ "',md5='"
+											+ fileMD5
+											+ "',size="
+											+ uFile.length()
+											+ ",lastModified="
+											+ nowDate.getTime()
+											+ ",rollPath='" + rootPath
+											+ "' WHERE  fileId=" + fid;// 不需要用revision区分
+									if (fileName.startsWith("~$")) {
+										// 不更新状态
+										this.deleteId(fid,
+												FileRevisionTableName,
+												FileSysTableName, conn);
+										sql = "UPDATE "
+												+ FileRevisionTableName
+												+ " set storePath='"
+												+ archiveFilePath
+												+ "',md5='"
+												+ fileMD5
+												+ "',size="
+												+ uFile.length()
+												+ ",lastModified="
+												+ nowDate.getTime()
+												+ ",rollPath='" + rootPath
+												+ "' WHERE fileId=" + fid;
 									}
-									log4j.debug("[mySQL] UPDATE revision :\n" + sql);
+									log4j.debug("[mySQL] UPDATE revision :\n"
+											+ sql);
 									if (stmt.executeUpdate(sql) > 0) {
-//										sql = "DELETE FROM " + getFileRevisionTable() + " WHERE size=0 AND length(md5)<10 AND fileId=" + fileId + " AND id<" + maxRevisionId;
-//										log4j.debug("[mySQL] DELETE null revision :" + sql);
-//										stmt.executeUpdate(sql);
-										needDelMap.put(fileId, revisionCop);//操作完再统一删除
+										// sql = "DELETE FROM " +
+										// getFileRevisionTable() +
+										// " WHERE size=0 AND length(md5)<10 AND fileId="
+										// + fileId + " AND id<" +
+										// maxRevisionId;
+										// log4j.debug("[mySQL] DELETE null revision :"
+										// + sql);
+										// stmt.executeUpdate(sql);
+										needDelMap.put(fileId, revisionCop);// 操作完再统一删除
 									}
-									if(oldFileId>0)
-									{
-										sql = "UPDATE " + FileRevisionTableName + " SET status=0, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
-										+ ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE  fileId=" + oldFileId +" AND revision=" + existRevision;
-										log4j.debug("[mySQL] UPDATE old File revision :\n" + sql);
+									if (oldFileId > 0) {
+										sql = "UPDATE "
+												+ FileRevisionTableName
+												+ " SET status=0, storePath='"
+												+ archiveFilePath
+												+ "',md5='"
+												+ fileMD5
+												+ "',size="
+												+ uFile.length()
+												+ ",rollPath='" + rootPath
+												+ "' WHERE  fileId="
+												+ oldFileId + " AND revision="
+												+ existRevision;
+										log4j.debug("[mySQL] UPDATE old File revision :\n"
+												+ sql);
 										stmt.executeUpdate(sql);
-										fSql = "UPDATE " + FileSysTableName + " SET md5 ='" + fileMD5 + "',size = " + uFile.length() + ",description ='" + checkNameForSpecialChars(description) + "',lastModified=" + nowDate.getTime() + " WHERE id =" + fileId;
-										if(existRevision==revisionCop)
-										{
-											String upfidSql= "UPDATE " + FileSysTableName + " set md5 ='" + fileMD5 + "',size = " + uFile.length() + ",description ='" + checkNameForSpecialChars(description) + "',lastModified=" + nowDate.getTime() + " WHERE id =" + fid;
-											log4j.debug("[mySQL] UPDATE upfidSql file :\n" + fSql);
+										fSql = "UPDATE "
+												+ FileSysTableName
+												+ " SET md5 ='"
+												+ fileMD5
+												+ "',size = "
+												+ uFile.length()
+												+ ",description ='"
+												+ checkNameForSpecialChars(description)
+												+ "',lastModified="
+												+ nowDate.getTime()
+												+ " WHERE id =" + fileId;
+										if (existRevision == revisionCop) {
+											String upfidSql = "UPDATE "
+													+ FileSysTableName
+													+ " set md5 ='"
+													+ fileMD5
+													+ "',size = "
+													+ uFile.length()
+													+ ",description ='"
+													+ checkNameForSpecialChars(description)
+													+ "',lastModified="
+													+ nowDate.getTime()
+													+ " WHERE id =" + fid;
+											log4j.debug("[mySQL] UPDATE upfidSql file :\n"
+													+ fSql);
 											stmt.executeUpdate(upfidSql);
-												
-											fSql = "UPDATE " + FileSysTableName + " set md5 ='" + fileMD5 + "',size = " + uFile.length() + ",description ='" + checkNameForSpecialChars(description) + "',lastModified=" + nowDate.getTime() + ",status =0 WHERE status>-2 AND id =" + oldFileId;
+
+											fSql = "UPDATE "
+													+ FileSysTableName
+													+ " set md5 ='"
+													+ fileMD5
+													+ "',size = "
+													+ uFile.length()
+													+ ",description ='"
+													+ checkNameForSpecialChars(description)
+													+ "',lastModified="
+													+ nowDate.getTime()
+													+ ",status =0 WHERE status>-2 AND id ="
+													+ oldFileId;
 										}
+									} else {
+										fSql = "UPDATE "
+												+ FileSysTableName
+												+ " set md5 ='"
+												+ fileMD5
+												+ "',size = "
+												+ uFile.length()
+												+ ",description ='"
+												+ checkNameForSpecialChars(description)
+												+ "',lastModified="
+												+ nowDate.getTime()
+												+ ",status =0 WHERE status>-2 AND id ="
+												+ fileId;
 									}
-									else
-									{
-										fSql = "UPDATE " + FileSysTableName + " set md5 ='" + fileMD5 + "',size = " + uFile.length() + ",description ='" + checkNameForSpecialChars(description) + "',lastModified=" + nowDate.getTime() + ",status =0 WHERE status>-2 AND id =" + fileId;
-									}
-									log4j.debug("[mySQL] UPDATE file :\n" + fSql);
-									if(stmt.executeUpdate(fSql)>0)
-									{
-										alreadyIds +=","+fileId+",";//已经更新的fileId
-										//处理重复记录
-										
+									log4j.debug("[mySQL] UPDATE file :\n"
+											+ fSql);
+									if (stmt.executeUpdate(fSql) > 0) {
+										alreadyIds += "," + fileId + ",";// 已经更新的fileId
+										// 处理重复记录
+
 										// 日志
-										if(oldFileId>0)
-											fileId=oldFileId;
-										this.UpLog(userId, pid, fileId, existRevision, nowDate, shareName,FileRevisionTableName,FileSysTableName,conn);
-									/*	if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-											String sqlLog = "insert into jweb_file_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
-													+ userId + "," + pid + "," + fileId + "," + existRevision + ",'CIFS更新文件','','" + sf.format(nowDate) + "','CIFS','w'," + 0 + "," + 0 + ")";
-											log4j.debug("[mySQL] sqlLog SQL:" + sqlLog);
-											stmt.executeUpdate(sqlLog);
-										} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-											String sqlLog = "insert into jweb_commonfile_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
-													+ userId + "," + pid + "," + fileId + "," + existRevision + ",'CIFS更新文件','','" + sf.format(nowDate) + "','CIFS','w'," + 0 + "," + 0 + ")";
-											log4j.debug("[mySQL] sqlLog SQL:" + sqlLog);
-											stmt.executeUpdate(sqlLog);
-										}*/
+										if (oldFileId > 0)
+											fileId = oldFileId;
+										String ipAddress = "";// TODO
+										this.UpLog(userId, pid, fileId,
+												existRevision, nowDate,
+												"CIFS更新文件","w",ipAddress,
+												FileRevisionTableName,
+												FileSysTableName, conn);
+										/*
+										 * if
+										 * (shareName.equalsIgnoreCase(DBUtil.
+										 * SHARENAME_USERFILE)) { String sqlLog
+										 * =
+										 * "insert into jweb_file_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
+										 * + userId + "," + pid + "," + fileId +
+										 * "," + existRevision +
+										 * ",'CIFS更新文件','','" +
+										 * sf.format(nowDate) + "','CIFS','w',"
+										 * + 0 + "," + 0 + ")";
+										 * log4j.debug("[mySQL] sqlLog SQL:" +
+										 * sqlLog); stmt.executeUpdate(sqlLog);
+										 * } else if (shareName.equals(DBUtil.
+										 * SHARENAME_COMMFILE) ||
+										 * shareName.equalsIgnoreCase
+										 * (DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+										 * String sqlLog =
+										 * "insert into jweb_commonfile_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
+										 * + userId + "," + pid + "," + fileId +
+										 * "," + existRevision +
+										 * ",'CIFS更新文件','','" +
+										 * sf.format(nowDate) + "','CIFS','w',"
+										 * + 0 + "," + 0 + ")";
+										 * log4j.debug("[mySQL] sqlLog SQL:" +
+										 * sqlLog); stmt.executeUpdate(sqlLog);
+										 * }
+										 */
 									}
-									
-									if(oldFileId>0 && existRevision==revisionCop)
-									{
-										// Build the filesystem  path to the file
+
+									if (oldFileId > 0
+											&& existRevision == revisionCop) {
+										// Build the filesystem path to the file
 										// TODO
-										String filesysPath = buildPathForFileId(oldFileId,stmt,shareName);
-										log4j.debug("DBI#saveJarData,fileList["+i+"] 查找 filesysPath更新FileSegmentInfo:" + filesysPath);
+										String filesysPath = buildPathForFileId(
+												oldFileId, stmt, shareName);
+										log4j.debug("DBI#saveJarData,fileList["
+												+ i
+												+ "] 查找 filesysPath更新FileSegmentInfo:"
+												+ filesysPath);
 										if (filesysPath != null) {
-											FileState fstate = m_dbCtx.getStateCache().findFileState(filesysPath,true);
-											FileSegmentInfo fileSegInfo = (FileSegmentInfo) fstate.findAttribute(ObjectIdFileLoader.DBFileSegmentInfo);
-											log4j.debug("DBI#saveJarData,fileList["+i+"]更新fileSegInfo:" + fileSegInfo);
-											if ( fileSegInfo != null) {
+											FileState fstate = m_dbCtx
+													.getStateCache()
+													.findFileState(filesysPath,
+															true);
+											FileSegmentInfo fileSegInfo = (FileSegmentInfo) fstate
+													.findAttribute(ObjectIdFileLoader.DBFileSegmentInfo);
+											log4j.debug("DBI#saveJarData,fileList["
+													+ i
+													+ "]更新fileSegInfo:"
+													+ fileSegInfo);
+											if (fileSegInfo != null) {
 												fileSegInfo.setQueued(false);
 												fileSegInfo.setUpdated(false);
-												fileSegInfo.setStatus(FileSegmentInfo.Saved);
+												fileSegInfo
+														.setStatus(FileSegmentInfo.Saved);
 											}
 										}
 									}
 								} else {
-									sql = "UPDATE " + FileRevisionTableName + " set status=-1, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
-									+ ",lastModified=" + nowDate.getTime() + ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE fileId=" + fileId;
+									sql = "UPDATE "
+											+ FileRevisionTableName
+											+ " set status=-1, storePath='"
+											+ archiveFilePath
+											+ "',md5='"
+											+ fileMD5
+											+ "',size="
+											+ uFile.length()
+											+ ",lastModified="
+											+ nowDate.getTime()
+											+ ",rollPath='" + rootPath
+											+ "' WHERE fileId=" + fileId;
 									stmt.executeUpdate(sql);
-									log4j.error("DBI#saveJarData,fileList["+i+"] ERROR 被更新的版本记录已经不存在，不执行更新; fileId:" + fileId);
+									log4j.error("DBI#saveJarData,fileList["
+											+ i
+											+ "] ERROR 被更新的版本记录已经不存在，不执行更新; fileId:"
+											+ fileId);
 								}
+
+								conn.commit();
 							} catch (SQLException e) {
-								log4j.error("DBI#saveJarData,fileList["+i+"] SQLException error ; \nsql:"+ sql+ "\nfSql:"+ fSql+ "  ; "+ e.getMessage());
+								if (conn != null) conn.rollback();
+								log4j.error("DBI#saveJarData,fileList[" + i
+										+ "] SQLException error ; \nsql:" + sql
+										+ "\nfSql:" + fSql + "  ; "
+										+ e.getMessage());
 							}
-						}else
-						{
-							log4j.warn("DBI#saveJarData,fileList["+i+"] ERROR to store  file exists fileId:" + fileId + ", fileExist:" + fileExist);
+						} else {
+							log4j.warn("DBI#saveJarData,fileList[" + i
+									+ "] ERROR to store  file exists fileId:"
+									+ fileId + ", fileExist:" + fileExist);
 						}
 					}
-				}
-				else
-				{
-					//删除不必要的文件
-					if(!alreadyIds.contains(","+fid+",") && oldFileId>0)
-					{
-						sql = "UPDATE " + FileSysTableName+ " SET status = -2,lastModified=" + nowDate.getTime() + " WHERE status>-1 AND id = " + fid;
-						log4j.debug("[mySQL] DELETE uploadFile not exists :" + sql);
+				} else {
+					// 删除不必要的文件
+					if (!alreadyIds.contains("," + fid + ",") && oldFileId > 0) {
+						sql = "UPDATE " + FileSysTableName
+								+ " SET status = -2,lastModified="
+								+ nowDate.getTime()
+								+ " WHERE status>-1 AND id = " + fid;
+						log4j.debug("[mySQL] DELETE uploadFile not exists :"
+								+ sql);
 						stmt.executeUpdate(sql);
 					}
-					log4j.error("DBI#saveJarData,fileList["+i+"] uploadFile not exists : fileId:" +  dbDetails.getFileId() + ", file path:" + (null != uFile?uFile.getAbsolutePath():"null"));
+					log4j.error("DBI#saveJarData,fileList["
+							+ i
+							+ "] uploadFile not exists : fileId:"
+							+ dbDetails.getFileId()
+							+ ", file path:"
+							+ (null != uFile ? uFile.getAbsolutePath() : "null"));
 				}
 			}
-			
+
 			stmt.executeUpdate(updateMaxRevision_hql);
-			//删除不需要的
-			if(null != needDelMap && needDelMap.size()>0)
-			{
+			// 删除不需要的
+			if (null != needDelMap && needDelMap.size() > 0) {
 				String[] delArr = null;
-				Iterator iterator = needDelMap.keySet().iterator();                
-	            while (iterator.hasNext()) {    
-	            	Object key = iterator.next();    
-	            	sql = "UPDATE " + FileRevisionTableName+ " SET status=-2 WHERE size=0 AND length(md5)<10 AND fileId=" + key + " AND revision<" +needDelMap.get(key);
+				Iterator iterator = needDelMap.keySet().iterator();
+				while (iterator.hasNext()) {
+					Object key = iterator.next();
+					sql = "UPDATE "
+							+ FileRevisionTableName
+							+ " SET status=-2 WHERE size=0 AND length(md5)<10 AND fileId="
+							+ key + " AND revision<" + needDelMap.get(key);
 					log4j.debug("[mySQL] DELETE null revision :" + sql);
 					stmt.executeUpdate(sql);
-	            }
+				}
 			}
 		} catch (SQLException ex) {
 			// DEBUG
-			log4j.error("DBI#saveJarData  SQLException " , ex);
+			log4j.error("DBI#saveJarData  SQLException ", ex);
 			// Rethrow the exception
 			throw new DBException(ex.getMessage());
 		} finally {
@@ -5887,8 +6515,14 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				}
 			}
 			// Release the database connection
-			if (conn != null)
+			if (conn != null) {
+				try {
+					conn.setAutoCommit(true);
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
 				releaseConnection(conn);
+			}
 		}
 
 		// Return the allocated Jar id
@@ -5896,7 +6530,6 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		return jarId;
 	}
 
-	
 	/**
 	 * Delete the file data for the specified file/stream
 	 * 
@@ -5950,7 +6583,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		} catch (SQLException ex) {
 
 			// DEBUG
-			log4j.error("DBI#deleteFileData ERROR " , ex);
+			log4j.error("DBI#deleteFileData ERROR ", ex);
 		} finally {
 
 			// Close the delete statement
@@ -5993,8 +6626,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			// Need to delete the existing data
 
 			delStmt = conn.createStatement();
-			String sql = "DELETE FROM " + JarDataTable
-					+ " WHERE JarId = " + jarId + ";";
+			String sql = "DELETE FROM " + JarDataTable + " WHERE JarId = "
+					+ jarId + ";";
 
 			// DEBUG
 			log4j.debug("[mySQL] Delete Jar data SQL: " + sql);
@@ -6009,7 +6642,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		} catch (SQLException ex) {
 
 			// DEBUG
-			log4j.error("DBI#deleteJarData ERROR " , ex);
+			log4j.error("DBI#deleteJarData ERROR ", ex);
 		} finally {
 
 			// Close the delete statement
@@ -6058,9 +6691,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 			// Delete any current mapping record for the object
 
-			String sql = "DELETE FROM " + ObjectIdTable
-					+ " WHERE FileId = " + fileId + " AND StreamId = "
-					+ streamId;
+			String sql = "DELETE FROM " + ObjectIdTable + " WHERE FileId = "
+					+ fileId + " AND StreamId = " + streamId;
 
 			// DEBUG
 			log4j.debug("[mySQL] Save object id SQL: " + sql);
@@ -6089,7 +6721,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		} catch (SQLException ex) {
 
 			// DEBUG
-			log4j.error("DBI#saveObjectId ERROR " , ex);
+			log4j.error("DBI#saveObjectId ERROR ", ex);
 			// Rethrow the exception
 
 			throw new DBException(ex.getMessage());
@@ -6153,7 +6785,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		} catch (SQLException ex) {
 
 			// DEBUG
-			log4j.error("DBI#loadObjectId ERROR " , ex);
+			log4j.error("DBI#loadObjectId ERROR ", ex);
 			// Rethrow the exception
 
 			throw new DBException(ex.getMessage());
@@ -6205,9 +6837,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			conn = getConnection();
 			stmt = conn.createStatement();
 
-			String sql = "DELETE FROM " + ObjectIdTable
-					+ " WHERE FileId = " + fileId + " AND StreamId = "
-					+ streamId;
+			String sql = "DELETE FROM " + ObjectIdTable + " WHERE FileId = "
+					+ fileId + " AND StreamId = " + streamId;
 
 			// DEBUG
 			log4j.debug("[mySQL] Delete object id SQL: " + sql);
@@ -6218,7 +6849,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		} catch (SQLException ex) {
 
 			// DEBUG
-			log4j.error("DBI#deleteObjectId ERROR " , ex);
+			log4j.error("DBI#deleteObjectId ERROR ", ex);
 
 			// Rethrow the exception
 
@@ -6285,7 +6916,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		} catch (SQLException ex) {
 
 			// DEBUG
-			log4j.error("DBI#readSymbolicLink ERROR " , ex);
+			log4j.error("DBI#readSymbolicLink ERROR ", ex);
 			// Rethrow the exception
 
 			throw new DBException(ex.getMessage());
@@ -6334,8 +6965,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			conn = getConnection();
 			delStmt = conn.createStatement();
 
-			String sql = "DELETE FROM " + SymLinkTable
-					+ " WHERE FileId = " + fid;
+			String sql = "DELETE FROM " + SymLinkTable + " WHERE FileId = "
+					+ fid;
 
 			// DEBUG
 			log4j.debug("[mySQL] Delete symbolic link SQL: " + sql);
@@ -6347,7 +6978,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			// Debug
 			log4j.debug("[mySQL] Deleted symbolic link fid=" + fid);
 		} catch (SQLException ex) {
-			log4j.error("DBI#deleteSymbolicLinkRecord ERROR " , ex);
+			log4j.error("DBI#deleteSymbolicLinkRecord ERROR ", ex);
 		} finally {
 
 			// Close the delete statement
@@ -6375,22 +7006,11 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 *            Statement
 	 * @return String
 	 */
-	private String buildPathForFileId(int fileid, Statement stmt,String shareName) {
+	private String buildPathForFileId(int fileid, Statement stmt,
+			String shareName) {
 
 		// Build an array of folder names working back from the files id
-		String FileSysTableName = FileSysTable_COMMFILE;
-		String FileRevisionTableName = FileRevisionTable_COMMFILE;
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-			FileSysTableName = FileSysTable_MYFILE;
-			FileRevisionTableName = FileRevisionTable_MYFILE;
-		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-			FileSysTableName = FileSysTable_COMMFILE;
-			FileRevisionTableName = FileRevisionTable_COMMFILE;
-		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-		{
-			FileSysTableName = FileSysTable_SHAREFILE;
-			FileRevisionTableName = FileRevisionTable_SHAREFILE;
-		}
+		String FileSysTableName = getFileSysTableName(shareName);
 		StringList names = new StringList();
 
 		try {
@@ -6426,7 +7046,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		} catch (SQLException ex) {
 
 			// DEBUG
-			log4j.error("DBI#buildPathForFileId ERROR " , ex);
+			log4j.error("DBI#buildPathForFileId ERROR ", ex);
 			return null;
 		}
 
@@ -6451,23 +7071,27 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	}
 
 	// 获得存储池卷路径
-	private String getRollPath(long fileId, long fileSize, String shareName,Connection conn)
-			throws DBException, DiskFullException {
+	private String getRollPath(long fileId, long fileSize, int userId, String shareName,
+			Connection conn) throws DBException, DiskFullException {
 		String rollPath = null;// 卷路径(绝对)
 
 		String equipmentPath = null;// 设备路径
 		int poolId = 1;// 默认存储池id
 		String poolPath = null;// 存储池路径
-//		Connection conn = null;
+		// Connection conn = null;
 		Statement stmt = null;
 		try {
 			// Get a connection to the database
-//			conn = getConnection();
+			// conn = getConnection();
 			stmt = conn.createStatement();
+			CacheManager cacheManager = CacheManagerUtil.getCacheManager();
+			Cache equipmentPathCache = null;
 
 			String sql = "SELECT value FROM jweb_config WHERE name = '"
 					+ DBUtil.NETDISK_USERFILE_STOREDIR_DEFAULT + "'";
-			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS) ) {
+			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE)
+					|| shareName
+							.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
 				sql = "SELECT value FROM jweb_config WHERE name = '"
 						+ DBUtil.NETDISK_COMMFILE_STOREDIR_DEFAULT + "'";
 			}
@@ -6479,7 +7103,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			}
 			rs.close();
 
-			if ((shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS))
+			if ((shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) || shareName
+					.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS))
 					&& fileId > 0) {
 				// 查询对应的资料库存储池id
 				sql = "SELECT pid1 FROM " + FileSysTable_COMMFILE
@@ -6499,16 +7124,48 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 						poolId = rs.getInt("pool_id");
 					}
 				}
+			} else if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+				
+				if (null != cacheManager) {
+					Cache poolIdCache = cacheManager.getCache("EquipmentPathCache");
+//					poolIdCache.removeAll();
+					Element element = poolIdCache.get("userId___"+userId);
+					if (null != element && element.getObjectValue() != null) {
+						poolId = (Integer) element.getObjectValue();
+					} else {
+						UserBean user = this.getUserByUserId(userId);
+						int departmentId = 0;
+						if (null != user) {
+							departmentId = user.getDepartmentId();
+						} else {
+							log4j.error(" user is null  !");
+//							throw new DBException( "user is null  !" );
+						}
+						CallableStatement proc = null;
+						try {
+							conn = getConnection();
+							stmt = conn.createStatement();
+							proc = conn.prepareCall("{ call getPoolIdFromDeptId(?,?) }");
+							proc.setLong(1, departmentId);
+							proc.registerOutParameter(2, Types.INTEGER); 
+							proc.executeUpdate();
+							poolId = proc.getInt(2);
+							log4j.info(" call getPoolIdFromDeptId success !");
+						} catch (Exception e) {
+							log4j.error(" call getPoolIdFromDeptId failed !", e);
+						}
+						poolIdCache.put(new Element("userId___"+userId, poolId));
+					}
+				}
 			}
 
-			CacheManager cacheManager = CacheManagerUtil.getCacheManager();
-			Cache equipmentPathCache = null;
 			if (null != cacheManager) {
 				equipmentPathCache = cacheManager
 						.getCache("EquipmentPathCache");
 				Element element = equipmentPathCache.get(poolId);
 				if (null != element && element.getObjectValue() != null) {
-//					log4j.debug("@@ Cache hit - EquipmentPathCache :" + poolId);
+					// log4j.debug("@@ Cache hit - EquipmentPathCache :" +
+					// poolId);
 					equipmentPath = element.getObjectValue().toString();
 				}
 			}
@@ -6534,7 +7191,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				poolPathCache = cacheManager.getCache("PoolPathCache");
 				Element element = poolPathCache.get(poolId);
 				if (null != element && element.getObjectValue() != null) {
-//					log4j.debug("@@ Cache hit - PoolPathCache :" + poolId);
+					// log4j.debug("@@ Cache hit - PoolPathCache :" + poolId);
 					poolPath = element.getObjectValue().toString();
 				}
 			}
@@ -6556,9 +7213,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			}
 
 			if (null == poolPath || null == equipmentPath) {
-				log4j
-						.error("Failed to load path  for  equipmentPath or poolPath is null; equipmentPath:"
-								+ equipmentPath + ", poolPath:" + poolPath);
+				log4j.error("Failed to load path  for  equipmentPath or poolPath is null; equipmentPath:"
+						+ equipmentPath + ", poolPath:" + poolPath);
 				throw new DBException(
 						"Failed to load path  for  equipmentPath or poolPath is null; equipmentPath:"
 								+ equipmentPath + ", poolPath:" + poolPath);
@@ -6610,7 +7266,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			}
 		} catch (SQLException ex) {
 			// DEBUG
-			log4j.error("DBI#getRollPath ERROR " , ex);
+			log4j.error("DBI#getRollPath ERROR ", ex);
 			// Rethrow the exception
 			throw new DBException(ex.getMessage());
 		} finally {
@@ -6650,7 +7306,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				cache = cacheManager.getCache("UserCache");
 				Element element = cache.get(userName);
 				if (null != element && element.getObjectValue() != null) {
-//					log4j.debug("@@ Cache hit - getUserByUsername :"+ userName);
+					// log4j.debug("@@ Cache hit - getUserByUsername :"+
+					// userName);
 					return (UserBean) element.getObjectValue();
 				}
 			}
@@ -6689,7 +7346,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			}
 		} catch (SQLException ex) {
 			// DEBUG
-			log4j.error("DBI#getUserByUsername ERROR " , ex);
+			log4j.error("DBI#getUserByUsername ERROR ", ex);
 			// Rethrow the exception
 			throw new DBException(ex.getMessage());
 		} finally {
@@ -6707,6 +7364,77 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		return user;
 	}
 	
+	public UserBean getUserByUserId(int userId) throws DBException {
+		if (userId <= 0) {
+			log4j.error("参数错误：getUserByUsername userId:" + userId);
+			return null;// 用户名为空
+		}
+		UserBean user = null;
+		Connection conn = null;
+		Statement stmt = null;
+		try {
+			CacheManager cacheManager = CacheManagerUtil.getCacheManager();
+			Cache cache = null;
+			if (null != cacheManager) {
+				cache = cacheManager.getCache("UserCache");
+				Element element = cache.get("___userId___"+userId);
+				if (null != element && element.getObjectValue() != null) {
+					// log4j.debug("@@ Cache hit - getUserByUsername :"+
+					// userName);
+					return (UserBean) element.getObjectValue();
+				}
+			}
+			
+			// Get a connection to the database
+			conn = getConnection();
+			stmt = conn.createStatement();
+			
+			String sql = "SELECT username,role_id ,department_id,name,password,security_hash,userSpaceSize FROM jweb_users WHERE status>=0 AND id="+ userId;
+			// Load the file details
+			log4j.debug("[mySQL] get user SQL: " + sql);
+			ResultSet rs = stmt.executeQuery(sql);
+			if (rs.next()) {
+				user = new UserBean();
+				user.setId(userId);// id
+				user.setUsername(rs.getString("username"));// 用户名
+				user.setRoleId(rs.getInt("role_id"));// 角色
+				user.setDepartmentId(rs.getInt("department_id"));// 部门
+				user.setName(rs.getString("name"));// 姓名
+				user.setPassword(rs.getString("password"));
+				user.setSecurityHash(rs.getString("security_hash"));
+				user.setUserSpaceSize(rs.getInt("userSpaceSize"));
+			} else {
+				log4j.error(" getUserByUsername is not exists ; ___:" + userId);
+			}
+			rs.close();
+			
+			if (null != user) {
+				// 添加到缓存
+				Element element = new Element("___userId___"+userId, user);
+				if (null != cache) {
+					cache.put(element);
+				}
+			}
+		} catch (SQLException ex) {
+			// DEBUG
+			log4j.error("DBI#getUserByUsername ERROR ", ex);
+			// Rethrow the exception
+			throw new DBException(ex.getMessage());
+		} finally {
+			// Close the statement
+			if (stmt != null) {
+				try {
+					stmt.close();
+				} catch (SQLException ex) {
+				}
+			}
+			// Release the database connection
+			if (conn != null)
+				releaseConnection(conn);
+		}
+		return user;
+	}
+
 	/**
 	 * 获得BaseUrl
 	 * 
@@ -6716,7 +7444,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 */
 	public String getBaseUrl(Connection conn) throws DBException {
 		String BaseUrl = "http://127.0.0.1/";
-//		Connection conn = null;
+		// Connection conn = null;
 		Statement stmt = null;
 		try {
 			CacheManager cacheManager = CacheManagerUtil.getCacheManager();
@@ -6725,7 +7453,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				cache = cacheManager.getCache("BaseUrlCache");
 				Element element = cache.get("BaseUrl");
 				if (null != element && element.getObjectValue() != null) {
-					return  (String) element.getObjectValue();
+					return (String) element.getObjectValue();
 				}
 			}
 
@@ -6749,7 +7477,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			}
 		} catch (SQLException ex) {
 			// DEBUG
-			log4j.error("DBI#getUserByUsername ERROR " , ex);
+			log4j.error("DBI#getUserByUsername ERROR ", ex);
 			// Rethrow the exception
 			throw new DBException(ex.getMessage());
 		} finally {
@@ -6774,9 +7502,10 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 * @return
 	 * @throws DBException
 	 */
-	public String getGroupIdsByUserid(int userId,Connection conn) throws DBException {
+	public String getGroupIdsByUserid(int userId, Connection conn)
+			throws DBException {
 		String groupIds = "";
-//		Connection conn = null;
+		// Connection conn = null;
 		Statement stmt = null;
 		try {
 			CacheManager cacheManager = CacheManagerUtil.getCacheManager();
@@ -6785,13 +7514,14 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				cache = cacheManager.getCache("GroupIdsCache");
 				Element element = cache.get(userId);
 				if (null != element && element.getObjectValue() != null) {
-//					log4j.debug("@@ Cache hit - getGroupIdsByUserid :"+ userId);
+					// log4j.debug("@@ Cache hit - getGroupIdsByUserid :"+
+					// userId);
 					return element.getObjectValue().toString();
 				}
 			}
 
 			// Get a connection to the database
-//			conn = getConnection();
+			// conn = getConnection();
 			stmt = conn.createStatement();
 
 			String gSql = "SELECT group_id FROM jweb_user_groups WHERE user_id = "
@@ -6805,8 +7535,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				groupIds += rsGroup.getInt("group_id");
 			}
 			rsGroup.close();
-
-			if (StringUtils.isNotEmpty(groupIds)) {
+			
+			if (null != groupIds) {
 				// 添加到缓存
 				Element element = new Element(userId, groupIds);
 				if (null != cache) {
@@ -6815,7 +7545,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			}
 		} catch (SQLException ex) {
 			// DEBUG
-			log4j.error("DBI#getGroupIdsByUserid ERROR " , ex);
+			log4j.error("DBI#getGroupIdsByUserid ERROR ", ex);
 			// Rethrow the exception
 			throw new DBException(ex.getMessage());
 		} catch (Exception ex) {
@@ -6842,10 +7572,11 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 * @return
 	 * @throws DBException
 	 */
-	public String getDepartmentPathById(int departmentId,Connection conn) throws DBException {
+	public String getDepartmentPathById(int departmentId, Connection conn)
+			throws DBException {
 		String departmentPath = "";
 
-//		Connection conn = null;
+		// Connection conn = null;
 		Statement stmt = null;
 		try {
 			CacheManager cacheManager = CacheManagerUtil.getCacheManager();
@@ -6861,7 +7592,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			}
 
 			// Get a connection to the database
-//			conn = getConnection();
+			// conn = getConnection();
 			stmt = conn.createStatement();
 
 			// 查询部门的parentId
@@ -6883,7 +7614,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			}
 		} catch (SQLException ex) {
 			// DEBUG
-			log4j.error("DBI#getDepartmentPathById ERROR " , ex);
+			log4j.error("DBI#getDepartmentPathById ERROR ", ex);
 			// Rethrow the exception
 			throw new DBException(ex.getMessage());
 		} catch (Exception ex) {
@@ -6905,373 +7636,59 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 	/**
 	 * rootPath_bak 值暂不用
+	 * 
+	 * docx 文件打开时会调用这个方法， 保存时候却不会！
+	 * @param ipAddress 
+	 * 
+	 * 
 	 */
-	public int saveFileArchive(String rootPath_bak, String tempDir, int fileId,
-			File uFile, String shareName, FileSegment fileSeg)
+	public synchronized int saveFileArchive(String rootPath_bak, String tempDir, int fileId,
+			File uFile, String shareName, FileSegment fileSeg, String ipAddress)
 			throws SQLException, DBException, IOException {
-
-		String fileName = uFile.getName();
-		log4j.debug("DBI#saveFileArchive, time:" + System.currentTimeMillis()
-				+ ", fname:" + fileName + ", fileId:" + fileId+", shareName:"+shareName);
-		/*
-		 * //判断如果是Office临时文件，则不创建索引到数据库 Pattern temporaryPattern =
-		 * Pattern.compile(temporaryReg); Matcher fMatcher =
-		 * temporaryPattern.matcher(fileName); if(fMatcher.find()) {
-		 * log4j.debug("saveFileArchive不创建Word临时文件到数据库索引 fname:" + fileName);
-		 * return -1; }
-		 */
 		
-		String FileSysTableName = FileSysTable_COMMFILE;
-		String FileRevisionTableName = FileRevisionTable_COMMFILE;
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-			FileSysTableName = FileSysTable_MYFILE;
-			FileRevisionTableName = FileRevisionTable_MYFILE;
-		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-			FileSysTableName = FileSysTable_COMMFILE;
-			FileRevisionTableName = FileRevisionTable_COMMFILE;
-		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-		{
-			FileSysTableName = FileSysTable_SHAREFILE;
-			FileRevisionTableName = FileRevisionTable_SHAREFILE;
-		}
-		
-		String rootPath = "";
-		String description = "";
-		int userId = 0;
-		Connection conn = null;
-		Statement stmt = null;
-		java.util.Date nowDate = new java.util.Date();
-		String sql= "";
-		try {
-			// Get a connection to the database
-			conn = getConnection();
-			stmt = conn.createStatement();
-			ResultSet rs;
-			// 上传的文件不存在时,不创建记录
-			if (uFile.exists() && uFile.length() > 0) {
-//				FileParser fp = new FileParser(uFile, fileName);// 提取内容
-//				description = fp.getDescription();
-//				description = checkNameForSpecialChars(description);//替换特殊符
-				description = this.getDescription(uFile, fileName);
-				String fileMD5 = MD5Util.getFileMD5(uFile);// 上传文件的MD5值
-				// String Sname = null;
-				boolean fileExist = false;
-	//			int revisionCount = 1;
-				long pid = 0;
-				String existMd5 ="";
-				int fid = fileId;//用于处理fileId = oldFileId后，更新最后版本问题
-				int oldFileId = 0;
-				String fname = "";
-				
-				String archiveFilePath = DiskUtil.getArchiveFilePath(fileMD5);
-				try {
-					rootPath = this.getRollPath(fileId, uFile.length(), shareName,conn);// 获得存储池卷目录
-				} catch (DBException e) {
-					log4j.error("Error 获得存储池卷目录失败 rootPath= " + rootPath);
-					throw new DBException(e.getMessage());
-				} catch (DiskFullException e) {
-					log4j.error("Roll Disk is Full ,rootPath : " + rootPath);
-					throw new DiskFullException( "Roll Disk is Full ,rootPath : " + rootPath);
-				}
-				
-				synchronized (this)// 暂时改为同步。 避免产生重复文件
-				{
-					// 如果已经存在且内容相同则不更新，直接成功
-					
-					long existSize = 0;
-					int existStatus = 0;
-					long existRevision = 0;		
-					
-					sql = "SELECT userId,id,pid,name,status,revisionCount,revision,md5,size FROM " + FileSysTableName + " WHERE id = " + fileId;
-					log4j.debug("[mySQL] select status SQL: " + sql);
-					rs = stmt.executeQuery(sql);
-					if (rs.next()) {
-						userId = rs.getInt("userId");
-						int status = rs.getInt("status");
-						fname = rs.getString("name");
-						pid = rs.getLong("pid");
-	//					revisionCount = rs.getInt("revisionCount");
-						
-						// 如果已经存在且内容相同则不更新，直接成功
-						existMd5 = rs.getString("md5");
-						existSize = rs.getLong("size");
-						existStatus = rs.getInt("status");
-						existRevision = rs.getLong("revision");//查询被更新的版本
-						
-						if (status < 0) {
-							// 已经删除掉新的，使用旧的fileId，则获得旧的id
-							sql = "SELECT id,pid,name,status,revisionCount,revision,md5,size FROM " + FileSysTableName + " WHERE status>=0 AND pid = " + pid + " AND LOWER(name)=LOWER('" + checkNameForSpecialChars(fname)  + "') ORDER BY revision DESC,id ASC";
-							log4j.debug("[mySQL] old file id SQL: " + sql);
-							ResultSet rs2 = stmt.executeQuery(sql);
-							
-							if (rs2.next()) {
-								oldFileId = rs2.getInt("id");
-								
-								// 如果已经存在且内容相同则不更新，直接成功
-								existMd5 = rs2.getString("md5");
-								existSize = rs2.getLong("size");
-								existStatus = rs2.getInt("status");
-								log4j.info("重新查询到的fileId:" + fileId);
-							}
-							int seconds = 0;// 时间限制3秒
-							while (oldFileId == 0 && seconds < 3)// 延时１秒取状态，最多重复5次
-							{
-								log4j.info("fileId:" + fileId + ",重新查询到的fileId, 第" + seconds + "次，等待1秒取数据");
-								try {
-									Thread.sleep(500);
-									log4j.debug("[mySQL] old file id[" + seconds + "] SQL: " + sql);
-									rs2 = stmt.executeQuery(sql.replace("status>=0", "status>=-1"));
-									if (rs2.next()) {
-										oldFileId = rs2.getInt("id");
-										
-										// 如果已经存在且内容相同则不更新，直接成功
-										existMd5 = rs2.getString("md5");
-										existSize = rs2.getLong("size");
-										existStatus = rs2.getInt("status");
-									}
-									seconds++;
-									if (oldFileId > 0) {
-										break;
-									} else {
-										if (seconds > 4) {
-											log4j.error("重新查询到的fileId，等待时间过长!");
-										}
-									}
-								} catch (Exception e) {
-									e.printStackTrace();
-								}
-							}
-							rs2.close();
-							log4j.debug("本文件已经删除,fileId:" + fileId + "，重新查询正确的文件ID:" + oldFileId);
-							if (oldFileId > 0) {
-								fileId = oldFileId;
-							} else {
-								log4j.error("已经删除状态的,fileId:" + fileId + "，未得到正确的旧文件ID:" + oldFileId);
-							}
-						}
-					}
-					rs.close();
-					
-//					if (existStatus > -1 && existSize == uFile.length()  && fileMD5.length()==32 && fileMD5.equalsIgnoreCase(existMd5) && existSize > 0) {
-//						String fSql = "update " + getFileSysTableName() + " set lastModified=" + nowDate.getTime() + " WHERE id =" + fileId;
-//						log4j.debug("[mySQL] 更新存在的文件 SQL: " + fSql);
-//						stmt.executeUpdate(fSql);
-//						// DEBUG
-//						log4j .debug("DBI#saveFileArchive 文件已经存在且内容相同 ,filename= " + fileName 	+ ",size=" 	+ uFile.length() + ",fileMD5=" + fileMD5);
-//						fileExist = true;
-//						return StsSuccess;// 直接返回成功，避免重复产生版本记录
-//					} else {
-//						log4j.info("DBI#saveFileArchive 文件存在但内容不等 ,filename= " + fileName + ",existStatus:" + existStatus + ",size:" + existSize + "=" + uFile.length() 	+ ",fileMD5:" + existMd5 + "=" + fileMD5);
-//						fileExist = false;
-//						// revisionCount =revisionCount+1;
-//						// 因提前插入了版本，所以不用更新此值
-//					}
-	
-					if (!fileExist) {							
-						if (StringUtils.isEmpty(fileMD5)) {
-							fileMD5 = "md51";
-						}
-						else
-						{
-							//MD5去重
-							String resultMd5 = this.getMD5(fileMD5, rootPath, archiveFilePath, uFile,FileRevisionTableName,FileSysTableName,conn);
-							if(resultMd5 != "" )
-							{
-								String[] root = resultMd5.split(",");
-								rootPath = root[0];
-								archiveFilePath = root[1];
-							}
-							/*String Md5Sql = "SELECT storePath,rollPath FROM  "+FileRevisionTableName+" WHERE md5 = '"+fileMD5+"' ORDER BY id DESC";
-							ResultSet md5Rs = stmt.executeQuery(Md5Sql);
-							if(md5Rs.next())
-							{
-								archiveFilePath = md5Rs.getString("storePath");
-								rootPath = md5Rs.getString("rollPath");
-								md5Rs.close();
-							}
-							else
-							{
-								File saveFile = new File(rootPath + archiveFilePath); // 目标存储文件
-								try {
-									AESUtil.encryptFile(uFile, saveFile);
-								} catch (Exception e) {
-										log4j.error("DBI#saveFileArchiveerror ; fileId:" 	+ fileId + ", ufile:" + uFile.getAbsolutePath() + "  ; " + e.getMessage());
-								}
-							}*/
-						}
-						String maxRevisionSql = "SELECT max(revision) as revision FROM " +FileRevisionTableName + " WHERE status>=0 AND fileId=" + fileId;
-						long maxRevision = 0;
-						log4j.debug("[mySQL] max maxRevision SQL: " + maxRevisionSql);
-						ResultSet rRs1 = stmt.executeQuery(maxRevisionSql);
-						int revisionCop = 0;
-						if(rRs1.next())
-						{
-							revisionCop = rRs1.getInt("revision");
-						}
-						rRs1.close();
-						
-						ResultSet rRs = stmt.executeQuery(findMaxRevision_hql);
-						if (rRs.next()) {
-							maxRevision = rRs.getInt("max_value");
-						}
-						rRs.close();
-						if (StringUtils.isEmpty(fileMD5)) {
-							fileMD5 = "md51";
-						}
-						log4j.debug("\n***********************上传/更新文件***********************fileId:"+fileId+" ;revision:"+maxRevision);
-						log4j.debug(description);
-						log4j.debug("\n***********************");
-						String fSql = "";
-						try {
-							if (revisionCop > 0) {
-								if(existMd5.length()==32 && oldFileId==0)
-								{
-										//复制
-										sql ="INSERT INTO "+FileRevisionTableName+" (fileid,name,tags,md5,size,lastModified,userId,revision,revisionCount,status,rollPath,storePath,description)" +
-										" SELECT distinct fileid, name,tags,md5,size,lastModified,userId,revision+1 as revision,revisionCount+1 as revisionCount, status,rollPath,storePath,description from jweb_commonfilerevision WHERE  fileId = " + fileId+" AND revision=" + maxRevision;
-										log4j.debug("[mySQL]  UPDATE file 复制版本 :\n" + fSql);
-										if (stmt.executeUpdate(sql) > 0) {
-											fSql = "update " + FileSysTableName + " set revision="+maxRevision+",revisionCount=revisionCount+1 WHERE id =" + fileId;
-											log4j.debug("[mySQL] UPDATE file 更新版本号 :\n" + fSql);
-											stmt.executeUpdate(fSql);
-										}
-								}
-								// 更新				
-	//							sql = "UPDATE " + getFileRevisionTable() + " set status=0, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
-	//							+ ",lastModified=" + nowDate.getTime() + ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE fileId=" + fileId +" AND revision=" + maxRevision;
-								sql = "UPDATE " + FileRevisionTableName + " set status=0, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
-								+ ",lastModified=" + nowDate.getTime() + ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE  fileId=" + fid;//不需要用revision区分
-								if(fileName.startsWith("~$"))
-								{
-									//不更新状态
-									this.deleteId(fid, FileRevisionTableName,FileSysTableName, conn);
-									sql = "UPDATE " + FileRevisionTableName + " set storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
-									+ ",lastModified=" + nowDate.getTime() + ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE fileId=" + fid;
-								}
-								log4j.debug("[mySQL] UPDATE revision :\n" + sql);
-								if (stmt.executeUpdate(sql) > 0) {
-									sql = "DELETE FROM " + FileRevisionTableName + " WHERE size=0 AND length(md5)<10 AND fileId=" + fileId + " AND revision<" + existRevision;
-									log4j.debug("[mySQL] DELETE null revision :" + sql);
-									stmt.executeUpdate(sql);
-								}
-								if(oldFileId>0)
-								{
-									sql = "UPDATE " + FileRevisionTableName + " set status=0, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
-									+ ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE status=4 AND fileId=" + oldFileId +" AND revision=" + existRevision;
-									log4j.debug("[mySQL] UPDATE old File revision :\n" + sql);
-									stmt.executeUpdate(sql);
-									fSql = "update " + FileSysTableName + " set md5 ='" + fileMD5 + "',size = " + uFile.length() + ",description ='" + checkNameForSpecialChars(description) + "',lastModified=" + nowDate.getTime() + " WHERE id =" + fileId;
-									if(existRevision==revisionCop)
-									{
-										fSql = "update " + FileSysTableName + " set md5 ='" + fileMD5 + "',size = " + uFile.length() + ",description ='" + checkNameForSpecialChars(description) + "',lastModified=" + nowDate.getTime() + ",status =0 WHERE status>-2 AND id =" + oldFileId;
-									}
-								}
-								else
-								{
-									fSql = "update " + FileSysTableName + " set md5 ='" + fileMD5 + "',size = " + uFile.length() + ",description ='" + checkNameForSpecialChars(description) + "',lastModified=" + nowDate.getTime() + ",status =0 WHERE status>-2 AND id =" + fileId;
-								}
-								log4j.debug("[mySQL] UPDATE file :\n" + fSql);
-								if(stmt.executeUpdate(fSql)>0)
-								{
-									//处理重复记录,按条件处理
-									fSql = "UDATE " + FileSysTableName + " SET status=-1 WHERE status>=0 AND pid = " + pid + " AND id<>"+fileId+" AND LOWER(name)=LOWER('" + checkNameForSpecialChars(fname) + "')";
-									int updateNumber = stmt.executeUpdate(sql);
-									if(updateNumber>0)
-									{
-										log4j.debug("[mySQL] 删除重复文件:\n" + fSql);
-										log4j.error("DBI#saveFileArchive 操作完后有重复的文件"+updateNumber+"个，已经强制删除!");
-									}
-									
-									// DEBUG
-									this.UpLog(userId, pid, fileId, existRevision, nowDate, shareName,FileRevisionTableName,FileSysTableName,conn);
-							/*		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-										String sqlLog = "insert into jweb_file_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
-												+ userId + "," + pid + "," + fileId + "," + existRevision + ",'CIFS更新文件','','" + sf.format(nowDate) + "','CIFS','w'," + 0 + "," + 0 + ")";
-										log4j.debug("[mySQL] sqlLog SQL:" + sqlLog);
-										stmt.executeUpdate(sqlLog);
-									} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-										String sqlLog = "insert into jweb_commonfile_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
-												+ userId + "," + pid + "," + fileId + "," + existRevision + ",'CIFS更新文件','','" + sf.format(nowDate) + "','CIFS','w'," + 0 + "," + 0 + ")";
-										log4j.debug("[mySQL] sqlLog SQL:" + sqlLog);
-										stmt.executeUpdate(sqlLog);
-									}*/
-								}
-								stmt.executeUpdate(updateMaxRevision_hql);
-							} else {
-								sql = "UPDATE " + FileRevisionTableName + " set status=-1, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
-								+ ",lastModified=" + nowDate.getTime() + ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE fileId=" + fileId;
-								stmt.executeUpdate(sql);
-								log4j.error("ERROR 被更新的版本记录已经不存在，不执行更新; fileId:" + fileId);
-							}
-						} catch (SQLException e) {
-							log4j.error("## DBFileLoader storeSingleFile SQLException error ; \nsql:"+ sql+ "\nfSql:"+ fSql+ "  ; "+ e.getMessage());
-						}
-						// uFile.delete();
-					} else {
-						log4j.error("ERROR to store  fileId:+" + fileId + ", fileExist:" + fileExist);
-					}
-				}
-			
-			} else {
-				// DEBUG
-				log4j.error("  uploadFile is 0 size : fileId:" + fileId + ", file:" + uFile.getAbsolutePath());
-				// Return an error status
-				return StsError;
-			}
-		} catch (SQLException ex) {
-			// DEBUG
-			log4j.error("DBI#saveFileArchive ERROR " , ex);
-			// Rethrow the exception
-			throw new DBException(ex.getMessage());
-		} finally {
-			// Close the statement
-			if (stmt != null) {
-				try {
-					stmt.close();
-				} catch (SQLException ex) {
-				}
-			}
-			// Release the database connection
-			if (conn != null)
-				releaseConnection(conn);
-		}
 		return StsSuccess;
 	}
-	
-	
+
 	/**
 	 * 获得文件的权限
 	 */
-	private String filePermissions(long permFileId,int userId,String groupIds,String departmentPath,Connection conn) throws DBException {
+	private String filePermissions(long permFileId, int userId,
+			String groupIds, String departmentPath, Connection conn)
+			throws DBException {
 		String permissions = "";
-//		Connection conn = null;
+		// Connection conn = null;
 		Statement stmt = null;
 
 		try {
-//			conn = getConnection();
-			stmt = conn.createStatement();	
+			// conn = getConnection();
+			stmt = conn.createStatement();
 			StringBuffer Dstr = new StringBuffer();
 			Dstr.append("SELECT * FROM jweb_systemrole_commonfile WHERE ");
-			//用户权限
-			Dstr.append("  (role_type=0 AND file_id =").append(permFileId).append(" AND role_id=").append(userId).append(") ");
-			//工作组权限
+			// 用户权限
+			Dstr.append("  (role_type=0 AND file_id =").append(permFileId)
+					.append(" AND role_id=").append(userId).append(") ");
+			// 工作组权限
 			if (StringUtils.isNotEmpty(groupIds)) {
-			Dstr.append(" OR (role_type=1 AND file_id =").append(permFileId).append(" AND role_id in(").append(groupIds).append(") )");
+				Dstr.append(" OR (role_type=1 AND file_id =")
+						.append(permFileId).append(" AND role_id in(")
+						.append(groupIds).append(") )");
 			}
-			//部门权限
+			// 部门权限
 			if (StringUtils.isNotEmpty(departmentPath)) {
-			Dstr.append(" OR (role_type=2 AND file_id =").append(permFileId).append(" AND role_id IN ( "+ departmentPath + ") )");
+				Dstr.append(" OR (role_type=2 AND file_id =")
+						.append(permFileId)
+						.append(" AND role_id IN ( " + departmentPath + ") )");
 			}
 			log4j.debug("[mySQL] Dstr SQL:" + Dstr);
 			ResultSet rs = stmt.executeQuery(Dstr.toString());
 			String value = "";
 			while (rs.next()) {
 				value = rs.getString("role_value");
-				permissions = StringUtil.combineChar(permissions, value);//集合权限
+				permissions = StringUtil.combineChar(permissions, value);// 集合权限
 			}
 			rs.close();
 		} catch (Exception ex) {
-			log4j.error("DBI#fileExists 异常:",ex);
+			log4j.error("DBI#fileExists 异常:", ex);
 		} finally {
 			// Close the statement
 
@@ -7292,6 +7709,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 		return permissions;
 	}
+
 	/**
 	 * Return the file loader data table name
 	 * 
@@ -7300,15 +7718,16 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	protected final String getDataTableName() {
 		return DataTable_COMMFILE;
 	}
-	
+
 	/**
 	 * Return the retention table name
 	 * 
 	 * @return String
 	 */
 	protected final String getRetentionTableName() {
-	  return RetentionTable_COMMFILE;
+		return RetentionTable_COMMFILE;
 	}
+
 	/**
 	 * Return the streams table name
 	 * 
@@ -7317,7 +7736,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	protected final String getStreamsTableName() {
 		return StreamsTable_COMMFILE;
 	}
-	
+
 	/**
 	 * Return the file loader queue table name
 	 * 
@@ -7326,7 +7745,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	protected final String getQueueTableName() {
 		return QueueTable_COMMFILE;
 	}
-	
+
 	/**
 	 * Return the file loader transaction table name
 	 * 
@@ -7336,18 +7755,18 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		return TransactQueueTable_COMMFILE;
 	}
 
-	public String getDescription(File Ufile,String name)
-	{
+	public String getDescription(File Ufile, String name) {
 		String description = "";
 		FileParser fp = new FileParser(Ufile, name);// 提取内容
 		description = fp.getDescription();
-		description = checkNameForSpecialChars(description);//替换特殊符
+		description = checkNameForSpecialChars(description);// 替换特殊符
 		return description;
-		
+
 	}
-	//获取版本
-	public long getRevision (Connection conn ) throws SQLException{
-//		Connection conn = getConnection();
+
+	// 获取版本
+	public long getRevision(Connection conn) throws SQLException {
+		// Connection conn = getConnection();
 		Statement stmt = conn.createStatement();
 		long maxRevision = 0;
 		ResultSet rRs = stmt.executeQuery(findMaxRevision_hql);
@@ -7366,27 +7785,31 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			releaseConnection(conn);
 		return maxRevision;
 	}
-	//MD5 去重
-	public String getMD5(String fileMD5,String rootPath,String archiveFilePath,File uFile,String getFileRevisionTable,String getFileSysTableName,Connection conn ) throws SQLException{
-		//MD5去重
-//		Connection conn = getConnection();
+
+	// MD5 去重
+	public String getMD5(String fileMD5, String rootPath,
+			String archiveFilePath, File uFile, String getFileRevisionTable,
+			String getFileSysTableName, Connection conn) throws SQLException {
+		// MD5去重
+		// Connection conn = getConnection();
 		Statement stmt = conn.createStatement();
-		String Md5Sql = "SELECT storePath,rollPath FROM  "+getFileRevisionTable+" WHERE md5 = '"+fileMD5+"' ORDER BY id DESC";
+		String Md5Sql = "SELECT storePath,rollPath FROM  "
+				+ getFileRevisionTable + " WHERE size = "+ uFile.length() +" AND md5 = '" + fileMD5
+				+ "' ORDER BY id DESC";
 		ResultSet md5Rs = stmt.executeQuery(Md5Sql);
-		if(md5Rs.next())
-		{
+		if (md5Rs.next()) {
 			archiveFilePath = md5Rs.getString("storePath");
 			rootPath = md5Rs.getString("rollPath");
 			md5Rs.close();
-			return rootPath+","+ archiveFilePath;
-		}
-		else
-		{
+			return rootPath + "," + archiveFilePath;
+		} else {
 			File saveFile = new File(rootPath + archiveFilePath); // 目标存储文件
 			try {
 				AESUtil.encryptFile(uFile, saveFile);
 			} catch (Exception e) {
-					log4j.error("DBI#saveFileArchiveerror ; fileId:" 	+ saveFile.getPath() + ", ufile:" + uFile.getAbsolutePath() + "  ; " + e.getMessage());
+				log4j.error("DBI#saveFileArchiveerror ; fileId:"
+						+ saveFile.getPath() + ", ufile:"
+						+ uFile.getAbsolutePath() + "  ; " + e.getMessage());
 			}
 		}
 		if (stmt != null) {
@@ -7400,12 +7823,19 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			releaseConnection(conn);
 		return "";
 	}
-	public void deleteId(long fid,String getFileRevisionTable,String getFileSysTableName,Connection conn ) throws SQLException{
-//		String upfidSql= "UPDATE " + getFileSysTableName() + " set md5 ='" + fileMD5 + "',size = " + uFile.length() + ",description ='" + checkNameForSpecialChars(description) + "',lastModified=" + nowDate.getTime() + " WHERE id =" + fid;
-//		Connection conn = getConnection();
+
+	public void deleteId(long fid, String getFileRevisionTable,
+			String getFileSysTableName, Connection conn) throws SQLException {
+		// String upfidSql= "UPDATE " + getFileSysTableName() + " set md5 ='" +
+		// fileMD5 + "',size = " + uFile.length() + ",description ='" +
+		// checkNameForSpecialChars(description) + "',lastModified=" +
+		// nowDate.getTime() + " WHERE id =" + fid;
+		// Connection conn = getConnection();
 		Statement stmt = conn.createStatement();
-		String delSql = "UPDATE "+ getFileSysTableName +" SET status =-2 WHERE id = "+fid;
-		String dRsql  = "UPDATE "+ getFileRevisionTable + " SET status =-2 WHERE fileId ="+fid;
+		String delSql = "UPDATE " + getFileSysTableName
+				+ " SET status =-2 WHERE id = " + fid;
+		String dRsql = "UPDATE " + getFileRevisionTable
+				+ " SET status =-2 WHERE fileId =" + fid;
 		log4j.debug("[mySQL] UPDATE upfidSql file :\n" + dRsql);
 		stmt.executeUpdate(delSql);
 		try {
@@ -7418,25 +7848,67 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			try {
 				stmt.close();
 			} catch (SQLException ex) {
+				ex.printStackTrace();
 			}
 		}
 		// Release the database connection
 		if (conn != null)
 			releaseConnection(conn);
 	}
-	//更新日志
-	public void UpLog(int userId,long pid,int fileId,long existRevision,java.util.Date nowDate,String shareName,String getFileRevisionTable,String getFileSysTableName,Connection conn ) throws SQLException
-	{
-//		Connection conn = getConnection();
+
+	// 更新日志
+	public void UpLog(int userId, long pid, int fileId, long existRevision,
+			java.util.Date nowDate, String logDesc, String operation, String ipAddress,
+			String getFileRevisionTable, String getFileSysTableName,
+			Connection conn) throws SQLException {
+		// Connection conn = getConnection();
+		
+		if (logDesc == null) {
+			logDesc = "CIFS更新文件";
+		}
 		Statement stmt = conn.createStatement();
 		if (getFileRevisionTable.equals("jweb_filerevision")) {
 			String sqlLog = "insert into jweb_file_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
-					+ userId + "," + pid + "," + fileId + "," + existRevision + ",'CIFS更新文件','','" + sf.format(nowDate) + "','CIFS','w'," + 0 + "," + 0 + ")";
+					+ userId
+					+ ","
+					+ pid
+					+ ","
+					+ fileId
+					+ ","
+					+ existRevision
+					+ ",'"
+					+ logDesc
+					+ "','"
+					+ ipAddress
+					+ "','"
+					+ sf.format(nowDate)
+					+ "',"+
+					"'CIFS','" 
+					+ operation 
+					+ "',"
+					+ 0 + "," + 0 + ")";
 			log4j.debug("[mySQL] sqlLog SQL:" + sqlLog);
 			stmt.executeUpdate(sqlLog);
 		} else if (getFileRevisionTable.equals("jweb_commonfilerevision")) {
 			String sqlLog = "insert into jweb_commonfile_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
-					+ userId + "," + pid + "," + fileId + "," + existRevision + ",'CIFS更新文件','','" + sf.format(nowDate) + "','CIFS','w'," + 0 + "," + 0 + ")";
+					+ userId
+					+ ","
+					+ pid
+					+ ","
+					+ fileId
+					+ ","
+					+ existRevision
+					+ ",'"
+					+ logDesc
+					+ "','"
+					+ ipAddress
+					+ "','"
+					+ sf.format(nowDate)
+					+ "',"+
+					"'CIFS','" 
+					+ operation 
+					+ "',"
+					+ 0 + "," + 0 + ")";
 			log4j.debug("[mySQL] sqlLog SQL:" + sqlLog);
 			stmt.executeUpdate(sqlLog);
 		}
@@ -7450,16 +7922,18 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		if (conn != null)
 			releaseConnection(conn);
 	}
-	//获取当前文件版本
-	public long getFilerevision(int fileId,String getFileRevisionTable,String getFileSysTableName,Connection conn ) throws SQLException
-	{
-//		Connection conn = getConnection();
+
+	// 获取当前文件版本
+	public long getFilerevision(int fileId, String getFileRevisionTable,
+			String getFileSysTableName, Connection conn) throws SQLException {
+		// Connection conn = getConnection();
 		Statement stmt = conn.createStatement();
 		long maxrevision = 0;
-		String maxRevisionSql = "SELECT max(revision) AS revision FROM " + getFileRevisionTable + " WHERE status>=0 AND fileId=" + fileId;
+		String maxRevisionSql = "SELECT max(revision) AS revision FROM "
+				+ getFileRevisionTable + " WHERE status>=0 AND fileId="
+				+ fileId;
 		ResultSet rs = stmt.executeQuery(maxRevisionSql);
-		if(rs.next())
-		{
+		if (rs.next()) {
 			maxrevision = rs.getLong("revision");
 		}
 		rs.close();
@@ -7474,16 +7948,18 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			releaseConnection(conn);
 		return maxrevision;
 	}
+
 	/**
 	 * 清理多余的文件
+	 * 
 	 * @param fileId
 	 * @param fileName
 	 * @return
-	 * @throws SQLException 
+	 * @throws SQLException
 	 * @throws SQLException
 	 */
-	public void cleanTempFile(String getFileRevisionTable,String getFileSysTableName) throws SQLException
-	{
+	public void cleanTempFile(String getFileRevisionTable,
+			String getFileSysTableName) throws SQLException {
 		Connection conn = getConnection();
 		Statement stmt = conn.createStatement();
 		int fileId = 0;
@@ -7491,32 +7967,32 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 		if (rs2.next())
 			fileId = rs2.getInt(1);
-		int maxId = fileId +3 ;
-		int minId = fileId -3;
-		String sql = "delete from "+getFileRevisionTable+" where id >"+minId+" and id <"+maxId+" and name like('~%.tmp') or name like('~$%')";
+		int maxId = fileId + 3;
+		int minId = fileId - 3;
+		String sql = "delete from " + getFileRevisionTable + " where id >"
+				+ minId + " and id <" + maxId
+				+ " and name like('~%.tmp') or name like('~$%')";
 		rs2.close();
-	} 
-	//获取一些老的元素  此处暂时不做处理 日后在修改
-	public String  getOldIdAndOther(long fileId,String fileName,String getFileRevisionTable,String getFileSysTableName) throws SQLException{
-		
-		/*			String newBuilder = this.getOldIdAndOther(fileId, fileName);
-		if(StringUtils.isNotEmpty(newBuilder))
-		{
-			String [] other = newBuilder.split(","); 
-			 existMd5 =other[0];
-			 System.out.println("5184   existMd5  "+existMd5);
-			 existSize = Long.parseLong(other[1]);
-			 existStatus = Integer.parseInt(other[2]);
-			 existRevision = Long.parseLong(other[3]);
-			 userId = Integer.parseInt(other[4]);
-			 pid = Long.parseLong(other[5]);
-			 oldFileId = Integer.parseInt(other[6]);
-			 alreadyIds = other[7];
-		}
-		*/
-		
+	}
+
+	// 获取一些老的元素 此处暂时不做处理 日后在修改
+	public String getOldIdAndOther(long fileId, String fileName,
+			String getFileRevisionTable, String getFileSysTableName)
+			throws SQLException {
+
+		/*
+		 * String newBuilder = this.getOldIdAndOther(fileId, fileName);
+		 * if(StringUtils.isNotEmpty(newBuilder)) { String [] other =
+		 * newBuilder.split(","); existMd5 =other[0];
+		 * log4j.debug("5184   existMd5  "+existMd5); existSize =
+		 * Long.parseLong(other[1]); existStatus = Integer.parseInt(other[2]);
+		 * existRevision = Long.parseLong(other[3]); userId =
+		 * Integer.parseInt(other[4]); pid = Long.parseLong(other[5]); oldFileId
+		 * = Integer.parseInt(other[6]); alreadyIds = other[7]; }
+		 */
+
 		int i = 0;
-		String existMd5 ="";
+		String existMd5 = "";
 		long existSize = 0;
 		int existStatus = 0;
 		long existRevision = 0;
@@ -7524,51 +8000,59 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		long pid = 0;
 		int oldFileId = 0;
 		String alreadyIds = "";
-		String docName ="doc,.docx,.xls,.xlsx";
+		String docName = "doc,.docx,.xls,.xlsx";
 		Connection conn = getConnection();
 		Statement stmt = conn.createStatement();
-		//根据文件ID 去cache表里面查询对应的数据
-		System.out.println("fileId  "+fileId);
-	    String 	sql = "SELECT userId,id,pid,name,status,revisionCount,revision,md5,size FROM " + getFileSysTableName + " WHERE id = " + fileId;
+		// 根据文件ID 去cache表里面查询对应的数据
+		log4j.debug("fileId  " + fileId);
+		String sql = "SELECT userId,id,pid,name,status,revisionCount,revision,md5,size FROM "
+				+ getFileSysTableName + " WHERE id = " + fileId;
 		log4j.debug("[mySQL] select status SQL: " + sql);
 		ResultSet rs = stmt.executeQuery(sql);
 		if (rs.next()) {
 			userId = rs.getInt("userId");
-			System.out.println("是否执行到此 --- "+rs.getString("name"));
+			log4j.debug("是否执行到此 --- " + rs.getString("name"));
 			int status = rs.getInt("status");
 			String fname = rs.getString("name");
 			pid = rs.getLong("pid");
-//			revisionCount = rs.getInt("revisionCount");
-			
+			// revisionCount = rs.getInt("revisionCount");
+
 			// 如果已经存在且内容相同则不更新，直接成功
 			existMd5 = rs.getString("md5");
 			existSize = rs.getLong("size");
 			existStatus = rs.getInt("status");
-			System.out.println("是否执行到此 --- "+rs.getString("status"));
-			existRevision = rs.getLong("revision");//查询被更新的版本
-			if(docName.contains(DiskUtil.getExt(fileName)) && (fileName.startsWith("~")==false||fileName.endsWith(".tmp")==false)&&status == -1)
-			{
-				System.out.println("是否执行此处 判断2003");
-				//状态恢复为0 表示存在
-				String revertSql ="update " + getFileSysTableName + " set status = 0 WHERE id = "+fileId;
-				if(stmt.executeUpdate(revertSql)>0)
-				{
+			log4j.debug("是否执行到此 --- " + rs.getString("status"));
+			existRevision = rs.getLong("revision");// 查询被更新的版本
+			if (docName.contains(DiskUtil.getExt(fileName))
+					&& (fileName.startsWith("~") == false || fileName
+							.endsWith(".tmp") == false) && status == -1) {
+				log4j.debug("是否执行此处 判断2003");
+				// 状态恢复为0 表示存在
+				String revertSql = "update " + getFileSysTableName
+						+ " set status = 0 WHERE id = " + fileId;
+				if (stmt.executeUpdate(revertSql) > 0) {
 					status = 0;
 					oldFileId = 0;
 				}
 			}
-			//如果状态小于0 去同目录下查询相同名字的文件
+			// 如果状态小于0 去同目录下查询相同名字的文件
 			if (status < 0) {
 				// 已经删除掉新的，使用旧的fileId，则获得旧的id
-				sql = "SELECT id,pid,name,status,revisionCount,revision,md5,size FROM " + getFileSysTableName + " WHERE status>=0 AND pid = " + pid + " AND LOWER(name)=LOWER('" + checkNameForSpecialChars(fname)  + "') ORDER BY revision DESC,id ASC";
+				sql = "SELECT id,pid,name,status,revisionCount,revision,md5,size FROM "
+						+ getFileSysTableName
+						+ " WHERE status>=0 AND pid = "
+						+ pid
+						+ " AND name='"
+						+ checkNameForSpecialChars(fname)
+						+ "' ORDER BY revision DESC,id ASC";
 				log4j.debug("[mySQL] old file id SQL: " + sql);
 				ResultSet rs2 = stmt.executeQuery(sql);
-				
+
 				if (rs2.next()) {
 					oldFileId = rs2.getInt("id");
-					
+
 					// 如果已经存在且内容相同则不更新，直接成功
-					System.out.println("是否执行到此 ---222 "+rs.getString("name"));
+					log4j.debug("是否执行到此 ---222 " + rs.getString("name"));
 					existMd5 = rs2.getString("md5");
 					existSize = rs2.getLong("size");
 					existStatus = rs2.getInt("status");
@@ -7577,14 +8061,18 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				int seconds = 0;// 时间限制3秒
 				while (oldFileId == 0 && seconds < 3)// 延时１秒取状态，最多重复5次
 				{
-					log4j.info("DBI#saveJarData,fileList["+i+"] fileId:" + fileId + ",重新查询到的fileId, 第" + seconds + "次，等待1秒取数据");
+					log4j.info("DBI#saveJarData,fileList[" + i + "] fileId:"
+							+ fileId + ",重新查询到的fileId, 第" + seconds
+							+ "次，等待1秒取数据");
 					try {
 						Thread.sleep(500);
-						log4j.debug("[mySQL] old file id[" + seconds + "] SQL: " + sql);
-						rs2 = stmt.executeQuery(sql.replace("status>=0", "status>=-1"));
+						log4j.debug("[mySQL] old file id[" + seconds
+								+ "] SQL: " + sql);
+						rs2 = stmt.executeQuery(sql.replace("status>=0",
+								"status>=-1"));
 						if (rs2.next()) {
 							oldFileId = rs2.getInt("id");
-							
+
 							// 如果已经存在且内容相同则不更新，直接成功
 							existMd5 = rs2.getString("md5");
 							existSize = rs2.getLong("size");
@@ -7595,7 +8083,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 							break;
 						} else {
 							if (seconds > 4) {
-								log4j.error("DBI#saveJarData,fileList["+i+"]重新查询到的fileId，等待时间过长!");
+								log4j.error("DBI#saveJarData,fileList[" + i
+										+ "]重新查询到的fileId，等待时间过长!");
 							}
 						}
 					} catch (Exception e) {
@@ -7603,20 +8092,24 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 					}
 				}
 				rs2.close();
-				log4j.debug("DBI#saveJarData,fileList["+i+"]本文件已经删除,fileId:" + fileId + "，重新查询正确的文件ID:" + oldFileId);
+				log4j.debug("DBI#saveJarData,fileList[" + i
+						+ "]本文件已经删除,fileId:" + fileId + "，重新查询正确的文件ID:"
+						+ oldFileId);
 				if (oldFileId > 0) {
-					log4j.debug("DBI#saveJarData,fileList["+i+"]"+alreadyIds+"########:"+alreadyIds.contains(","+oldFileId+","));
-					if(alreadyIds.contains(","+oldFileId+","))
-					{
-						log4j.warn("DBI#saveJarData,fileList["+i+"] 更新过,fileId:" + fileId);
-//						continue;//跳过本次循环
-					}
-					else
-					{
+					log4j.debug("DBI#saveJarData,fileList[" + i + "]"
+							+ alreadyIds + "########:"
+							+ alreadyIds.contains("," + oldFileId + ","));
+					if (alreadyIds.contains("," + oldFileId + ",")) {
+						log4j.warn("DBI#saveJarData,fileList[" + i
+								+ "] 更新过,fileId:" + fileId);
+						// continue;//跳过本次循环
+					} else {
 						fileId = oldFileId;
 					}
 				} else {
-					log4j.error("DBI#saveJarData,fileList["+i+"] 已经删除状态的,fileId:" + fileId + "，未得到正确的旧文件ID:" + oldFileId);
+					log4j.error("DBI#saveJarData,fileList[" + i
+							+ "] 已经删除状态的,fileId:" + fileId + "，未得到正确的旧文件ID:"
+							+ oldFileId);
 				}
 			}
 		}
@@ -7646,11 +8139,371 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		builder.append(oldFileId);
 		builder.append(",");
 		builder.append(alreadyIds);
-		return builder.toString() ;
-	}
-	public void checkSameRevisionFile(int fileId ,String md5 ,String fileName ,int revisionCount ,int revision  ) 
-	{
-		  
+		return builder.toString();
 	}
 
+	public void checkSameRevisionFile(int fileId, String md5, String fileName,
+			int revisionCount, int revision) {
+
+	}
+
+	/**
+	 * Return the FileSysTableName by shareName
+	 * 
+	 * @return String
+	 */
+	protected final String getFileSysTableName(String shareName) {
+
+		String FileSysTableName = FileSysTable_COMMFILE;
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			FileSysTableName = FileSysTable_MYFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE)
+				|| shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			 FileSysTableName = FileSysTable_COMMFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_RECIVEFILE)) {
+			FileSysTableName = FileSysTable_SHAREFILE;
+		}
+		return FileSysTableName;
+	}
+
+	/**
+	 * Return the RevisionTableName by shareName
+	 * 
+	 * @return String
+	 */
+	protected final String getRevisionTableName(String shareName) {
+		String FileRevisionTableName = FileRevisionTable_COMMFILE;
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			FileRevisionTableName = FileRevisionTable_MYFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE)
+				|| shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			FileRevisionTableName = FileRevisionTable_COMMFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_RECIVEFILE)) {
+			FileRevisionTableName = FileRevisionTable_SHAREFILE;
+		}
+		return FileRevisionTableName;
+	}
+
+	/**
+	 * 将文件名从诸如 "ldr_9_104_~$WRD0838.tmp"的形式 抽取出 ~$WRD0838.tmp
+	 * 
+	 * @param oldFileName
+	 * @return
+	 */
+	public String extractFileName(String oldFileName) {
+		if (oldFileName == null) {
+			return null;
+		}
+		String regex = "\\w+_\\d+_\\d+_";
+		Pattern p = Pattern.compile(regex);
+		Matcher matcher = p.matcher(oldFileName);
+		while (matcher.find()) {
+			String str = oldFileName.substring(matcher.group().length());
+			str = checkNameForSpecialChars(str);
+			return str;
+			
+		}
+		return null;
+	}
+
+	public int getBaseFileId() {
+		return baseFileId;
+	}
+
+	public void setBaseFileId(int baseFileId) {
+		this.baseFileId = baseFileId;
+	}
+
+	/**
+	 * 删除 fileName 
+	 * 
+	 *  参数格式： \资料库\AA\06171725\a.xlsx
+	 */
+	public synchronized Set<String> resetFileRenamed(String fileName) {
+		if (fileName != null) {
+//			fileName = fileName.substring(fileName.lastIndexOf("\\")+1);
+			fileName = fileName.replace('\\', '/');
+			this.fileRenamed.remove(fileName);
+		}
+//		log4j.debug("   	 fileRenamed ++ " + fileRenamed);
+		return null;
+	}
+	
+
+	/**
+	 * 因为shareName可能是不准确的，因此这里需要根据 dirId 重新获取shareName
+	 */
+	private String getShareName(long dirId, String old) {
+
+		String shareName = old;
+		String FileSysTableName = FileSysTable_COMMFILE;
+		if (!old.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE) && !old.equals(DBUtil.SHARENAME_COMMFILE)
+				&& !old.equals(DBUtil.SHARENAME_RECIVEFILE)) {
+			
+//			shareName = DBUtil.SHARENAME_COMMFILE;
+			//throw new RuntimeException("we just can't get the shareName getShareName +++ !");
+//			Connection conn;
+//			Statement stmt = null;
+//			ResultSet rRs = null;
+//			try {
+//				conn = getConnection();
+//				stmt = conn.createStatement();
+//				
+//				String dirSql = "SELECT pid FROM "
+//						+ FileSysTable_COMMFILE
+//						+ " WHERE id = "
+//						+ dirId
+//						+ " and status >=-1 ";
+//			
+//				rRs = stmt.executeQuery(dirSql);
+//				if (rRs.next()) {
+//					shareName = DBUtil.SHARENAME_COMMFILE;
+//				} else {
+//					dirSql = "SELECT pid FROM "
+//							+ FileSysTable_MYFILE
+//							+ " WHERE id = "
+//							+ dirId
+//							+ " and status >=-1 ";
+//					rRs = stmt.executeQuery(dirSql);
+//					if (rRs.next()) {
+//						shareName = DBUtil.SHARENAME_USERFILE;
+//					} else {
+//						dirSql = "SELECT pid FROM "
+//								+ FileSysTable_SHAREFILE
+//								+ " WHERE id = "
+//								+ dirId
+//								+ " and status >=-1 ";
+//						rRs = stmt.executeQuery(dirSql);
+//						if (rRs.next()) {
+//							shareName = DBUtil.SHARENAME_RECIVEFILE;
+//						}
+//					}
+//				}
+//				
+//			} catch (Exception e) {
+//				// TODO Auto-generated catch block
+//				e.printStackTrace();
+//			} finally {
+//				try {
+//					stmt.close();
+//					rRs.close();
+//				} catch (Exception e) {
+//					// TODO Auto-generated catch block
+//					e.printStackTrace();
+//				}
+//			}
+		}
+		
+		return shareName;
+		
+	}
+	
+
+	/**
+	 * 因为shareName可能是不准确的，此处采用排除法，以尽可能保证资料库文件操作的正确先
+	 */
+	public static boolean isCommonShare(String shareName) {
+		boolean b = false;
+//		if (!shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE) && !shareName.equals(DBUtil.SHARENAME_RECIVEFILE)) {
+//			b = true;
+//		}
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) || shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			b = true;
+		}
+		return b;
+	}
+
+//	public static boolean isUserFileShare(String shareName) {
+//		boolean b = false;
+//		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+//			b = true;
+//		}
+//		return b;
+//	}
+	
+	
+	/**
+	 * 
+	 * 判断是否是office文件，暂时只考虑 Word、Excel、 PowerPoint
+	 * 
+	 * TODO 
+	 * 
+	 * @param ext
+	 * @return
+	 */
+	public static boolean isOfficeFile(String ext) {
+		if(ext.endsWith("docx")
+		|| ext.endsWith("doc")
+		|| ext.endsWith("xlsx")
+		|| ext.endsWith("xls") 
+		|| ext.endsWith("pptx")
+		|| ext.endsWith("ppt")) {
+			return true;
+		}
+		return false;
+	}
+
+	
+	/**
+	 * 
+	 */
+	public void releaseLock(int userId, int fileId, String shareName) {
+
+		if (!isCommonShare(shareName)) {
+			return;
+		}
+		
+		String FileSysTableName = getFileSysTableName(shareName);
+		String FileRevisionTableName = getRevisionTableName(shareName);
+		
+		log4j.debug("MySQLDBLInterface.releaseLock()");
+		Statement stmt = null;
+		Connection conn = null;
+		try {
+			conn = getConnection();
+			stmt = conn.createStatement();
+			
+			String sql = "SELECT id, fileId FROM "
+					+ FileRevisionTableName
+					+ " WHERE status>=-1" 
+					//+ " AND name =  '" + this.fileRenamed 
+					+ " AND baseFileId = " + (fileId)
+					+ " ORDER BY revision DESC,id DESC limit 1";// 只查有效的版本
+			
+			long rfileId = 0;
+			log4j.debug("[mySQL] Load file data SQL: " + sql);
+			ResultSet rs = stmt.executeQuery(sql);
+			if (rs.next()) {
+				rfileId = rs.getLong("fileId");
+			}
+			
+			String sql2 = "SELECT islock FROM "
+			+ FileSysTableName
+			+ " WHERE status>=-1 AND id = " + (rfileId) 
+			+ " ORDER BY revision DESC limit 1";// 只查有效的版本
+			
+			ResultSet rs2 = stmt.executeQuery(sql2);
+			int islock = 0;
+			if (rs2.next()) {
+				islock = rs2.getInt("islock");
+			}
+			if (islock != 0) {
+				sql2 = "UPDATE "+ FileSysTableName + " SET lockedByUser = 0, islock = 0 "
+				+ " WHERE status>=-1 AND id = " + (rfileId)
+				+ " limit 1";// 只查有效的版本
+				int executeUpdate = stmt.executeUpdate(sql2);
+				
+				if (executeUpdate == 0) {
+					log4j.warn("release failed : " + rfileId);
+				}
+			}
+
+			
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} finally {
+			// Close the statement
+			if (stmt != null) {
+				try {
+					stmt.close();
+				} catch (SQLException ex) {
+				}
+			}
+			// Release the database connection
+			if (conn != null)
+				releaseConnection(conn);
+		}
+		
+		
+	}
+	
+	/**
+	 * 
+	 * 只对资料库文件进行加锁、解锁操作
+	 * 
+	 */
+	public void lock(int userId, int fileId, String shareName) {
+		if (!isCommonShare(shareName)) {
+			return;
+		}
+		log4j.debug("MySQLDBLInterface.lock()");
+		Statement stmt = null;
+		Connection conn = null;
+		try {
+			conn = getConnection();
+			stmt = conn.createStatement();
+			
+			String FileSysTableName = getFileSysTableName(shareName);
+			String FileRevisionTableName = getRevisionTableName(shareName);
+			
+//			int fileId = f.getFileId();
+			
+//			int lockedByUser = 0;
+//			String name;
+//			String rfileId = "";
+//			String sql2 = "SELECT lockedByUser FROM "
+//			+ FileSysTableName
+//			+ " WHERE status>=-1 AND id = " + (rfileId)
+//			+ " ORDER BY revision DESC limit 1";// 只查有效的版本
+//			
+//			ResultSet rs2 = stmt.executeQuery(sql2);
+//			if (rs2.next()) {
+//				lockedByUser = rs2.getInt("lockedByUser");
+//			}
+//			if (lockedByUser == 0) {
+			
+			String sql = "SELECT fileId FROM "
+					+ FileRevisionTableName
+					+ " WHERE status>=-1" 
+					//+ " AND name =  '" + this.fileRenamed 
+					+ " AND baseFileId = " + (fileId)
+					+ " ORDER BY revision DESC,id DESC limit 1";// 只查有效的版本
+			
+			long rfileId = 0;
+			// Find the data fragments for the file, check if the file is stored
+			// in a Jar
+			log4j.debug("[mySQL] Load file data SQL: " + sql);
+			ResultSet rs = stmt.executeQuery(sql);
+			// Load the file data from the main file record(s)
+			if (rs.next()) {
+				// Access the file data
+				rfileId = rs.getLong("fileId");
+			}
+			
+			if (rfileId > 0) {
+				String sql2 = "UPDATE "+ FileSysTableName + " SET islock = 1, lockedByUser = " + userId
+				+ " WHERE status>=-1 AND id = " + (rfileId)
+				+ " limit 1";// 只查有效的版本
+				int executeUpdate = stmt.executeUpdate(sql2);
+				
+				if (executeUpdate == 0) {
+					log4j.warn("lock failed : " + rfileId);
+				}
+			}
+				
+//			}
+			
+			
+			
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} finally {
+			// Close the statement
+			if (stmt != null) {
+				try {
+					stmt.close();
+				} catch (SQLException ex) {
+				}
+			}
+			// Release the database connection
+			if (conn != null)
+				releaseConnection(conn);
+		}
+		
+		
+	}
+	
+	
 }

@@ -1,11 +1,3 @@
-/*
- * Copyright (c) LinkApp Team All rights reserved.
- * 版权归LinkApp研发团队所有
- * 任何的侵权、盗版行为均将追究其法律责任
- * 
- * The LinkApp Project
- * http://www.linkapp.cn
- */
 
 package org.alfresco.jlan.server.filesys.db.mysql;
 

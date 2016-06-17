@@ -336,7 +336,7 @@ public class SessionSettings {
      * @return String
      */
     public String toString() {
-      StringBuffer str = new StringBuffer();
+      StringBuffer str = new StringBuffer(40);
       
       str.append("[");
       str.append(Protocol.asString(getPrimaryProtocol()));

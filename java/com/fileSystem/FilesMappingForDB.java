@@ -224,7 +224,8 @@ public class FilesMappingForDB implements ShareMapper, ConfigurationListener {
 		}
 		else
 		{
-			 srv= new SrvDiskInfo(2560000, 64, 512, 2304000);
+			// Default to a 8000Gb sized disk with 90% free space
+			srv = new SrvDiskInfo(256000000, 64, 512, 230400000);
 		}
 		
 		context.setDiskInformation(srv);
@@ -275,9 +276,12 @@ public class FilesMappingForDB implements ShareMapper, ConfigurationListener {
 	    
 	    rootElement.addChild(databaseInterfaceElement);
 	    
+	    
 	    ConfigElement FileLoaderElement = new ConfigElement("FileLoader", "");
 	    ConfigElement f_classElement = new ConfigElement("class", "org.alfresco.jlan.server.filesys.db.DBFileLoader");
-	    ConfigElement f_ThreadPoolSizeElement = new ConfigElement("ThreadPoolSize", "6:2");
+//	    ConfigElement f_ThreadPoolSizeElement = new ConfigElement("ThreadPoolSize", "6:2");
+	    ConfigElement f_ThreadPoolSizeElement = new ConfigElement("ThreadPoolSize", "2:1");
+	    
 	    ConfigElement f_TempDirectoryElement = new ConfigElement("TempDirectory", "/usr/linkapp/data/linkapp/archive/view/smbcommon");
 	    ConfigElement f_MaximumFilesPerDirectoryElement = new ConfigElement("MaximumFilesPerDirectory", "1000");
 	    FileLoaderElement.addChild(f_classElement);
@@ -344,8 +348,8 @@ public class FilesMappingForDB implements ShareMapper, ConfigurationListener {
 	    }
 		// Create volume information using the share name
 		VolumeInfo volInfo = new VolumeInfo(config.getName(), (int) System.currentTimeMillis(), new Date(System.currentTimeMillis()));
-		// Default to a 80Gb sized disk with 90% free space
-		SrvDiskInfo diskInfo = new SrvDiskInfo(2560000, 64, 512, 2304000);
+		// Default to a 8000Gb sized disk with 90% free space
+		SrvDiskInfo diskInfo = new SrvDiskInfo(256000000, 64, 512, 230400000);
 		
 		FileStateCache stateCache = null;
 		if ( drvObj instanceof DiskInterface) {

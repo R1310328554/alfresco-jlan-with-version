@@ -1,5 +1,4 @@
-
-package org.alfresco.jlan.server.filesys.db.mysql;
+package org.alfresco.jlan.server.filesys.db.mysql.was;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -12,14 +11,12 @@ import org.alfresco.jlan.server.filesys.FileType;
 import org.alfresco.jlan.server.filesys.db.DBSearchContext;
 import org.alfresco.jlan.util.WildCard;
 import org.apache.log4j.Logger;
-
-import com.util.DBUtil;
-
 /**
  * MySQL Database Search Context Class
  * 
  */
-public class MySQLSearchContextU extends DBSearchContext {
+public class MySQLWasSearchContextShare extends DBSearchContext {
+
 	private Logger log4j = Logger.getLogger(this.getClass());
 	/**
 	 * Class constructor
@@ -30,16 +27,12 @@ public class MySQLSearchContextU extends DBSearchContext {
 	 *            WildCard
 	 */
 	private String shareName;
-	private String userName;
 
-	protected MySQLSearchContextU(ResultSet rs, WildCard filter,
-			String shareName, String userName) {
-		
+	protected MySQLWasSearchContextShare(ResultSet rs, WildCard filter, String shareName) {
 		super(rs, filter);
 		this.shareName = shareName;
-		this.userName = userName;
-		log4j.debug("MySQLSearchContextU shareName:"+shareName+" ,userName:"+userName);
 	}
+	
 
 	/**
 	 * Return the next file from the search, or return false if there are no
@@ -52,38 +45,60 @@ public class MySQLSearchContextU extends DBSearchContext {
 	public boolean nextFileInfo(FileInfo info) {
 
 		// Get the next file from the search
-		log4j.debug("nextFileInfo ,info:"+info);
+
 		try {
+
+			// Return the next file details or loop until a match is found if a
+			// complex wildcard filter
+			// has been specified
 			while (m_rs.next()) {
-				info.setFileId(0);
-//				info.setFileName(m_rs.getString("name")+ DBUtil.SPECIAL_CHAR);
-				info.setFileName(m_rs.getString("name"));
-				info.setSize(0);
-				Timestamp createDate = m_rs.getTimestamp("regdate");
-				Timestamp modifyDate = m_rs.getTimestamp("lastvisit");
-				if (null != createDate && createDate.getTime()>0)
-					info.setCreationDateTime(createDate.getTime());
-				else
-					info.setCreationDateTime(System.currentTimeMillis());
-				if (null !=modifyDate && modifyDate.getTime()>0)
-					info.setModifyDateTime(modifyDate.getTime());
+				String name = m_rs.getString("name");
+				// Get the file name for the next file
+				info.setFileId(m_rs.getInt("id"));
+				info.setFileName(name);
+				info.setSize(m_rs.getLong("size"));
+				long modifyDate = m_rs.getLong("lastModified");
+				if (modifyDate != 0L)
+					info.setModifyDateTime(modifyDate);
 				else
 					info.setModifyDateTime(System.currentTimeMillis());
+				
+				Timestamp ts = m_rs.getTimestamp("add_time");
+				if (ts !=null && ts.getTime()>0)
+				{
+					info.setCreationDateTime(ts.getTime());
+					info.setChangeDateTime(info.getModifyDateTime());
+				}
+				else
+				{
+					info.setCreationDateTime(info.getModifyDateTime());
+					info.setChangeDateTime(info.getModifyDateTime());
+				}				
 				int attr = 0;
-				attr += FileAttribute.Directory;
-				attr += FileAttribute.ReadOnly;//用户层目录不允许操作
+				if (m_rs.getBoolean("isFile") == true) {
+					info.setFileType(FileType.RegularFile);					
+					attr += FileAttribute.ReadOnly;// 只读权限
+				} else
+					attr += FileAttribute.Directory;
+
+				if (m_rs.getBoolean("isHidden") == true) 
+				{
+					attr += FileAttribute.Hidden;//隐藏
+				}
 				info.setFileType(FileType.Directory);
+								
 				if (hasMarkAsOffline()) {
 					if (getOfflineFileSize() == 0 || info.getSize() >= getOfflineFileSize())
 						attr += FileAttribute.NTOffline;
 				}
 				info.setFileAttributes(attr);
-				info.setUid(m_rs.getInt("id"));
 				if (m_filter == null || m_filter.matchesPattern(info.getFileName()) == true)
 					return true;
 			}
 		} catch (SQLException ex) {
+			ex.printStackTrace();
 		}
+		// No more files
 		closeSearch();
 		return false;
 	}
@@ -101,8 +116,6 @@ public class MySQLSearchContextU extends DBSearchContext {
 		try {
 			String fileName = null;
 			while (m_rs.next()) {
-				// fileName = m_rs.getString("name");
-//				fileName = m_rs.getString("name") + DBUtil.SPECIAL_CHAR;
 				fileName = m_rs.getString("name");
 				if (m_filter == null || m_filter.matchesPattern(fileName) == true)
 					return fileName;
@@ -110,7 +123,6 @@ public class MySQLSearchContextU extends DBSearchContext {
 		} catch (SQLException ex) {
 			ex.printStackTrace();
 		}
-		// No more files
 		return null;
 	}
 
@@ -118,6 +130,7 @@ public class MySQLSearchContextU extends DBSearchContext {
 	 * Close the search
 	 */
 	public void closeSearch() {
+		// Check if the resultset is valid, if so then close it
 		if (m_rs != null) {
 			try {
 				Statement stmt = m_rs.getStatement();
@@ -128,6 +141,7 @@ public class MySQLSearchContextU extends DBSearchContext {
 			}
 			m_rs = null;
 		}
+		// Call the base class
 		super.closeSearch();
 	}
 

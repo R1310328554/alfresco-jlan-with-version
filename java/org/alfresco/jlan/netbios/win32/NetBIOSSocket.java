@@ -457,7 +457,7 @@ public class NetBIOSSocket {
 	 */
 	public String toString() {
 
-		StringBuffer str = new StringBuffer();
+		StringBuffer str = new StringBuffer(100);
 
 		str.append("[LANA:");
 		str.append(getLana());

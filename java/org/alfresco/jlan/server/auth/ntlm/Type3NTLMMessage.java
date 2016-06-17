@@ -289,7 +289,7 @@ public class Type3NTLMMessage extends NTLMMessage {
    */
   public String toString() {
 
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(100);
 
     str.append("[Type3:");
 

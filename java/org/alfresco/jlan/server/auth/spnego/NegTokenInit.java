@@ -355,7 +355,7 @@ public class NegTokenInit
    */
   public String toString()
   {
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(50);
     
     str.append("[NegTokenInit ");
     

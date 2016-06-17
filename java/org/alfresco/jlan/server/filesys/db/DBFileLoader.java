@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+
 import org.alfresco.jlan.server.SrvSession;
 import org.alfresco.jlan.server.core.DeviceContext;
 import org.alfresco.jlan.server.filesys.DiskDeviceContext;
@@ -39,6 +40,7 @@ import org.alfresco.jlan.server.filesys.cache.FileState;
 import org.alfresco.jlan.server.filesys.cache.FileStateCache;
 import org.alfresco.jlan.server.filesys.cache.FileStateListener;
 import org.alfresco.jlan.server.filesys.cache.FileStateProxy;
+import org.alfresco.jlan.server.filesys.db.mysql.MySQLDBLInterface;
 import org.alfresco.jlan.server.filesys.loader.BackgroundFileLoader;
 import org.alfresco.jlan.server.filesys.loader.CachedFileInfo;
 import org.alfresco.jlan.server.filesys.loader.FileLoader;
@@ -53,8 +55,8 @@ import org.alfresco.jlan.server.filesys.loader.MultipleFileRequest;
 import org.alfresco.jlan.server.filesys.loader.SingleFileRequest;
 import org.alfresco.jlan.util.MemorySize;
 import org.springframework.extensions.config.ConfigElement;
-
 import org.apache.log4j.Logger;
+
 import com.util.DBUtil;
 import com.util.DiskUtil;
 
@@ -73,7 +75,7 @@ import com.util.DiskUtil;
  * This class relies on a seperate DBDataInterface implementation to provide the
  * methods to load and save the file data to the database table.
  * 
- * @author gkspencer
+ * @author gkspencer/LUO KAI
  */
 public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 		FileStateListener {
@@ -92,7 +94,7 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 
 	// Maximum files per temporary sub-directory
 
-	private static final int MaximumFilesPerSubDir = 500;
+	private static final int MaximumFilesPerSubDir = 5000;
 
 	// Attributes attached to the file state
 
@@ -100,9 +102,10 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 
 	// Default/minimum/maximum number of worker threads to use
 
-	public static final int DefaultWorkerThreads = 4;
+	public static final int DefaultRedWorkerThreads = 40;
+	public static final int DefaultWrtWorkerThreads = 10;
 	public static final int MinimumWorkerThreads = 1;
-	public static final int MaximumWorkerThreads = 50;
+	public static final int MaximumWorkerThreads = 500;
 
 	// Default/minimum files per jar and jar size settings
 
@@ -628,15 +631,13 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 		// Find, or create, the file state for the file/directory
 		FileState fstate = m_stateCache.findFileState(params.getFullPath(),
 				true);
-		fstate.setExpiryTime(System.currentTimeMillis()
-				+ m_stateCache.getFileStateExpireInterval());
 
 		// Check if the file is a directory
 
 		DBNetworkFile netFile = null;
 
 		if (dir == false) {
-
+			
 			// Create the network file and associated file segment
 			CachedNetworkFile cacheFile = createNetworkFile(fstate, params,
 					name, fid, stid, did, userName);
@@ -648,6 +649,7 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 
 			FileSegment fileSeg = cacheFile.getFileSegment();
 
+			//log4j.debug(create   + "  / " + params.isOverwrite());
 			if (create == true || params.isOverwrite() == true) {
 
 				// Indicate that the file data is available, this is a new file
@@ -679,12 +681,37 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 				// DEBUG
 				log4j
 						.debug("DBF#FileLoader Queued file load, SEQUENTIAL access");
+//			} else if ( name.startsWith("nsh")&& name.endsWith(".docx")) {
+				
+				//log4j.debug("DBFileLoader.openFile()  Initial It");
+				//cacheFile.setStatus(FileSegmentInfo.Initial);// FileSegmentInfo.Initial && m_cacheFile.isQueued() == false
+//				cacheFile.openFile(create);
+//				cacheFile.closeFile();
+
+				// Queue a file data load request
+
+//					queueFileRequest(new SingleFileRequest(
+//							FileRequest.LOAD, cacheFile.getFileId(),
+//							cacheFile.getStreamId(), fileSeg.getInfo(),
+//							cacheFile.getFullNameStream(), fstate));
+			}
+			
+
+			String ext = DiskUtil.getExt(cacheFile.getName());
+//			if (cacheFile.getFileState().getFileStatus() == FileStatus.Unknown
+//					|| (cacheFile.getFileState().getFileStatus() == FileStatus.NotExist && DBUtil.SUPPORT_EXT
+//							.contains(ext))) {
+			if (DBUtil.SUPPORT_EXT.contains(ext)) {
+				log4j.debug(" OOOOOOOOOO  " + cacheFile);
 			}
 
 		} else {
 
 			// Create a placeholder network file for the directory
 
+			fstate.setExpiryTime(System.currentTimeMillis()
+					+ m_stateCache.getFileStateExpireInterval());
+			
 			netFile = new DirectoryNetworkFile(name, fid, did, m_stateCache
 					.getFileStateProxy(fstate));
 			netFile.setFullName(params.getPath());
@@ -720,9 +747,7 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 
 			CachedNetworkFile cacheFile = (CachedNetworkFile) netFile;
 			cacheFile.closeFile();
-
 			// Get the file segment details
-
 			FileSegment fileSeg = cacheFile.getFileSegment();
 
 			// Check if the file data has been updated, if so then queue a file
@@ -788,14 +813,16 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 				// If the file was opened for sequential access only then we can
 				// delete it from the
 				// temporary area sooner
-
+				
+				
 				long tmo = System.currentTimeMillis();
 
+//				tmo += 1000;
 				if (cacheFile.isSequentialOnly())
 					tmo += SequentialFileExpire;
 				else
 					tmo += m_stateCache.getFileStateExpireInterval();
-
+				
 				// Set the file state expiry, the local file data will be
 				// deleted when the file
 				// state expires (if there
@@ -884,7 +911,6 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 	public int loadFile(FileRequest req) throws Exception {
 
 		// DEBUG
-
 		long startTime = System.currentTimeMillis();
 		SingleFileRequest loadReq = (SingleFileRequest) req;
 
@@ -902,8 +928,12 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 					+ ",tempFilePath:" + tempFile.getAbsolutePath());
 
 			// Return an error status
-
-			fileSeg.setStatus(FileSegmentInfo.Error, false);
+			
+			if (fileSeg == null) {
+				
+			} else {
+				fileSeg.setStatus(FileSegmentInfo.Error, false);
+			}
 			return StsError;
 		}
 
@@ -920,7 +950,7 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 		
 		String sharePath = DiskUtil.findFristPath(loadReq.getVirtualPath());
 		int returnSts = getDBDataInterface().loadFileData(loadReq.getFileId(), loadReq.getStreamId(), fileSeg,sharePath);
-//		loadSts = returnSts;
+		loadSts = returnSts;
 		loadSts = StsSuccess;//直接返回成功		
 		if (loadSts == StsSuccess) {
 
@@ -931,7 +961,8 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 			// Update the file status
 
 			fileSeg.setStatus(FileSegmentInfo.Available, false);
-
+			
+						
 			// Run the file load processors
 
 			runFileLoadedProcessors(getContext(), loadReq.getFileState(),
@@ -1426,12 +1457,13 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 		// Update the segment status
 		fileSeg.setStatus(FileSegmentInfo.Saved, false);
 
+		String ipAddress = "";// TODO
 		// Indicate that the file save request was processed
 		String Filepath = m_curTempDir.getPath();
 		try {
 			getDBDataInterface().saveFileArchive(null, Filepath,
 					saveReq.getFileId(), tempFile,
-					firstPath, fileSeg);
+					firstPath, fileSeg, ipAddress);
 		} catch (DBException ex) {
 			log4j.error(ex);
 		} catch (IOException ex) {
@@ -1440,159 +1472,6 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 
 		return StsSuccess;
 	}
-
-	/*protected final int storeMultipleFile_bak(MultipleFileRequest saveReq)
-			throws Exception {
-		if (m_dbCtx.getShareName().equals(DBUtil.SHARENAME_RECIVEFILE)) {
-			log4j.debug("此处是否执行  文件编辑返回错误"
-					+ "  "
-					+ m_dbCtx.getShareName()
-							.equals(DBUtil.SHARENAME_RECIVEFILE));
-			return StsError;
-		}
-		String firstPath = "";
-		long totalSize = 0;
-		try {
-			for (int i = 0; i < saveReq.getNumberOfFiles(); i++) {
-				// Get the current temporary file
-				CachedFileInfo finfo = saveReq.getFileInfo(i);
-				FileState fstate = finfo.getFileState();
-				 firstPath = finfo.getVirtualPath();
-				if (firstPath.equals(DBUtil.SHARENAME_RECIVEFILE)) {
-					log4j.debug("此处是否执行  文件编辑返回错误"
-							+ "  "
-							+ m_dbCtx.getShareName()
-									.equals(DBUtil.SHARENAME_RECIVEFILE));
-					return StsError;
-				}
-				
-//				// DEBUG
-//				log4j.debug("DBF#storeMultipleFile() ["+i+"] info=" + finfo + ", fstate=" + fstate);
-				if (fstate != null && fstate.fileExists() == true) {
-					File tmpFile = null;
-					try {
-						tmpFile = new File(finfo.getTemporaryPath());
-						if (tmpFile.exists()) {
-							totalSize += tmpFile.length();
-						}
-					} catch (Exception ex) {
-						// DEBUG
-						log4j.error("Failed to store " + finfo.getTemporaryPath(), ex);
-					}
-				} else {
-					// DEBUG
-					log4j.info("DBF#storeMultipleFile() ignored file " + finfo.getTemporaryPath() + ", exists=false");
-				}
-			}
-		} catch (Exception ex) {
-			log4j.error(ex);
-		} finally {
-		}
-
-		// Write the Jar file to the database
-		int saveSts = StsRequeue;
-
-		String Filepath = m_curTempDir.getPath();
-
-		try {
-
-			// Create a list of the files/streams contained in the Jar file
-
-			DBDataDetailsList fileList = new DBDataDetailsList();
-
-			for (int i = 0; i < saveReq.getNumberOfFiles(); i++) {
-
-				// Get the current cached file
-
-				CachedFileInfo finfo = saveReq.getFileInfo(i);
-				
-
-				// Add details of the file/stream to the Jar file list
-
-				fileList.addFile(new DBDataDetails(finfo.getFileId(), finfo
-						.getStreamId()));
-				//				
-				FileSegment fileSeg = findFileSegmentForPath(finfo
-						.getVirtualPath());
-				FileState fstate = finfo.getFileState();
-				// DEBUG
-				log4j.debug("DBF#storeMultipleFile() ["+i+"] info=" + finfo + ", fstate=" + fstate);
-				if (fstate != null && fstate.fileExists() == true) {
-					File tmpFile = null;
-					try {
-						tmpFile = new File(finfo.getTemporaryPath());
-						if (tmpFile.exists()) {
-							log4j.debug("fsid:"+fstate.getFileId()+" ,fid:"+finfo.getFileId()+" ,fsize:"+fstate.getFileSize()+",asize:"+fstate.getAllocationSize()+" ,tsize:" + tmpFile.length()+" ,path"+tmpFile.getAbsolutePath()+", shareName:"+ m_dbCtx.getShareName()+" , firstPath:"+firstPath);
-							getDBDataInterface().saveFileArchive(null,
-									Filepath, finfo.getFileId(),
-									tmpFile, m_dbCtx.getShareName(),
-									fileSeg);// 应该放在for外围执行,并且要多行一起保存。效率还高
-						} else {
-							log4j
-									.error("Failed to store  , tmpFile not exists :  fileId:"
-											+ finfo.getFileId()
-											+ ", tmpPath"
-											+ finfo.getTemporaryPath());
-						}
-					} catch (Exception ex) {
-
-						// DEBUG
-						log4j.error("Failed to store ,fileId:"
-								+ finfo.getFileId() + ", tmppath:"
-								+ finfo.getTemporaryPath(), ex);
-					}
-				} else {
-					// DEBUG
-					log4j.info("DBF#storeMultipleFile() ignored file ,fid:"
-							+ finfo.getFileId() + ", tmppath:"
-							+ finfo.getTemporaryPath() + ", exists=false");
-				}
-			}
-
-			// Save the Jar file data to the database
-
-			// getDBDataInterface().saveJarData(jarFile.getAbsolutePath(),
-			// fileList);
-			// getDBDataInterface().storeMultipleFileData(rootPath, tmpFileList,
-			// fileList);
-
-			// Indicate that the database update was successful
-
-			saveSts = StsSuccess;
-
-			// Delete the temporary Jar file
-
-			// if ( hasKeepJars() == false)
-			// jarFile.delete();
-
-			// Update the file segment state for all files in the transaction
-
-			for (int i = 0; i < saveReq.getNumberOfFiles(); i++) {
-
-				// Get the current cached file
-
-				CachedFileInfo finfo = saveReq.getFileInfo(i);
-
-				// Clear the cached file state
-
-				if (finfo.hasFileState()) {
-					FileSegmentInfo fileSegInfo = (FileSegmentInfo) finfo
-							.getFileState().findAttribute(DBFileSegmentInfo);
-					if (fileSegInfo != null) {
-						fileSegInfo.setQueued(false);
-						fileSegInfo.setUpdated(false);
-						fileSegInfo.setStatus(FileSegmentInfo.Saved);
-					}
-				}
-			}
-		} catch (Exception ex) {
-			log4j.error(ex);
-		}
-
-		// Return the data save status
-
-		return saveSts;
-	}*/
 	
 	/**
 	 * Process a store multiple file request
@@ -1656,12 +1535,6 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 						if (tmpFile.exists()) {
 							totalSize += tmpFile.length();
 //							
-//							File saveFile = new File(Filepath + entryName); // 目标存储文件
-//							DiskUtil.copySingeFile(tmpFile, saveFile);
-//							
-//							//添加到保存
-//							jarFileList.add(tmpFile);
-//							fileList.addFile(new DBDataDetails(finfo.getFileId(), finfo.getStreamId()));
 						}
 						jarFileList.add(tmpFile);
 						fileList.addFile(new DBDataDetails(finfo.getFileId(), finfo.getStreamId()));
@@ -1703,19 +1576,6 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 
 			// Create a list of the files/streams contained in the Jar file
 
-			/*DBDataDetailsList fileList = new DBDataDetailsList();
-
-			for (int i = 0; i < saveReq.getNumberOfFiles(); i++) {
-
-				// Get the current cached file
-
-				CachedFileInfo finfo = saveReq.getFileInfo(i);
-
-				// Add details of the file/stream to the Jar file list
-
-				fileList.addFile(new DBDataDetails(finfo.getFileId(), finfo.getStreamId()));
-			}
-*/
 			// Save the Jar file data to the database
 			log4j.debug("fsid: fileList:"+fileList+", shareName:"+ m_dbCtx.getShareName()+" , firstPath:"+firstPath);
 			getDBDataInterface().saveJarData(jarFileList, fileList,firstPath);
@@ -1796,8 +1656,8 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 
 		// Convert the thread pool size parameter, or use the default value
 
-		m_readWorkers = DefaultWorkerThreads;
-		m_writeWorkers = DefaultWorkerThreads;
+		m_readWorkers = DefaultRedWorkerThreads;
+		m_writeWorkers = DefaultWrtWorkerThreads;
 
 		if (nameVal != null) {
 			try {
@@ -2316,8 +2176,8 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 
 		if (m_fileProcessors == null
 				|| m_fileProcessors.numberOfProcessors() == 0) {
-			log4j.warn("DBF#runFileStoreProcessors return m_fileProcessors:"
-					+ m_fileProcessors);
+//			log4j.warn("DBF#runFileStoreProcessors return m_fileProcessors:"
+//					+ m_fileProcessors);
 			return;
 		}
 
@@ -2359,8 +2219,8 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 	protected final void runFileLoadedProcessors(DiskDeviceContext context,
 			FileState state, FileSegment segment) {
 		// DEBUG
-		log4j.debug("DBF#runFileLoadedProcessors -context:" + context
-				+ " ,state:" + state);
+//		log4j.debug("DBF#runFileLoadedProcessors -context:" + context
+//				+ " ,state:" + state);
 		// Check if there are any file processors configured
 
 		if (m_fileProcessors == null
@@ -2559,10 +2419,12 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 	public boolean fileStateExpired(FileState state) {
 
 		// Check if the file state has an associated file segment
-
 		FileSegmentInfo segInfo = (FileSegmentInfo) state
 				.findAttribute(DBFileSegmentInfo);
 		boolean expire = true;
+		
+		if(segInfo != null)log4j.debug("DBF#fileStateExpired ++  " + segInfo  + (segInfo==null?"":segInfo.isQueued()));
+		
 		// log4j.debug("DBF#fileStateExpired , fileId:"+state.getFileId()+",path:"+state.getPath());
 		if (segInfo != null) {
 			// Check if the file has a request queued
@@ -2624,6 +2486,12 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 						// Indicate that the file state should not be deleted
 
 						expire = false;
+						
+						/**
+						 * 
+						 * 有时候Excel doc文件编辑后关闭，没有马上执行。。 竟然是再次获得焦点后才执行到这来。。不规律的！
+						 */
+						m_dbCtx.getDBInterface().resetFileRenamed(state.getPath());
 
 						// Debug
 						log4j.debug("$$ Deleted temporary file "
@@ -2738,25 +2606,43 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 
 				// Create a unique temporary file name
 
-				StringBuffer tempName = new StringBuffer();
-				tempName.append(getTempFilePrefix());
-				tempName.append(fid);
-
+//				StringBuffer tempName = new StringBuffer();
+//				tempName.append(getTempFilePrefix());
+//				tempName.append(fid);
+//
+//				if (stid > 0) {
+//					tempName.append("_");
+//					tempName.append(stid);
+//
+//					// DEBUG
+//					log4j.debug("## Temp file for stream ##");
+//				}
+//
+//				tempName.append(".tmp");
+				
+				StringBuffer tempFileName = new StringBuffer();
+				tempFileName.append(getTempFilePrefix());				
+				tempFileName.append(did);
+				tempFileName.append("_");
+				tempFileName.append(fid);
 				if (stid > 0) {
-					tempName.append("_");
-					tempName.append(stid);
-
+					tempFileName.append("_");
+					tempFileName.append(stid);
 					// DEBUG
 					log4j.debug("## Temp file for stream ##");
 				}
-
-				tempName.append(".tmp");
+				tempFileName.append("_");
+				tempFileName.append(fname);
 				// Create a new file segment
 
 				fileSegInfo = new FileSegmentInfo();
-				fileSeg = FileSegment.createSegment(fileSegInfo, fname,
+//				fileSeg = FileSegment.createSegment(fileSegInfo, tempFileName.toString(),
+//						m_curTempDir, params.isReadOnlyAccess() == false,
+//						userName+"_"+did);
+				fileSeg = FileSegment.createSegment(fileSegInfo, tempFileName.toString(),
 						m_curTempDir, params.isReadOnlyAccess() == false,
-						userName+"_"+did);
+//						"all_temp");
+						userName+"_temp");
 //				fileSeg = FileSegment.createSegment(fileSegInfo, tempName.toString(),
 //						m_curTempDir, params.isReadOnlyAccess() == false,
 //						userName+"_"+did);
@@ -2785,6 +2671,34 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 
 				// Check if the temporary file exists, if not then create it
 				File tempFile = new File(fileSeg.getTemporaryFile());
+				
+				//新增加的判断(判断文件是否更新)
+//				DBFileInfo finfo = (DBFileInfo) state.findAttribute(FileState.FileInformation);
+				
+				
+				//修改此段只对自己生成，别人的修改不生效 
+				/*if(null != finfo && tempFile.exists() && finfo.getModifyDateTime()>tempFile.lastModified())
+				{
+					//注意是用finfo.getModifyDateTime() 文件的修改时间
+					log4j.warn("DBF#createNetworkFile 新增加的判断(判断文件是否更新) finfo.size:"+finfo.getSize()+",tempSize:"+tempFile.length()+","+ finfo.getModifyDateTime()+" > "+tempFile.lastModified()+" , fname:"+fname);
+					//解决web端修改或其他终端修改不更新bug
+					// Create the temporary file
+					DiskUtil.copySingeFile(tempFile, new File(fileSeg.getTemporaryFile()+"."+finfo.getModifyDateTime()+".tmp"));
+					tempFile.delete();//先删除
+					
+					tempFile.createNewFile();
+					log4j.warn("重建后finfo.size:"+finfo.getSize()+",temp.size:"+tempFile.length()+",state.size:"+state.getFileSize());
+
+					// Reset the file segment state to indicate a file load is
+					// required
+
+					fileSeg.setStatus(FileSegmentInfo.Initial);
+					//清理缓存
+					state.setFileStatus( FileStatus.FileExists, FileState.ReasonFileCreated);
+					state.removeAllAttributes();
+				}*/
+				
+				//
 				if (tempFile.exists() == false) {
 
 					// Create the temporary file

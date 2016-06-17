@@ -361,7 +361,7 @@ public final class PrintQueueInfo implements Serializable {
 	 * @return Printer queue information string
 	 */
 	public final String toString() {
-		StringBuffer str = new StringBuffer();
+		StringBuffer str = new StringBuffer(60);
 		str.append("[");
 		str.append(getQueueName());
 		str.append(" : Pri ");

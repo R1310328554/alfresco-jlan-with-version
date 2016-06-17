@@ -123,7 +123,7 @@ public class SymLink {
    * @return String
    */
   public String toString() {
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(50);
     
     str.append("[SymLink subst=");
     str.append(getSubstituteName());

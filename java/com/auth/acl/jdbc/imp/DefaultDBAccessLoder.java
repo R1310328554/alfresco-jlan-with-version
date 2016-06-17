@@ -47,6 +47,11 @@ public class DefaultDBAccessLoder implements DBAccessLoader {
 			//空连接
 			access = "rw";
 		}
+		else if(null != shareName && shareName.toLowerCase().startsWith("was"))
+		{
+			//was连接
+			access = "rw";
+		}
 		else if(shareName.endsWith(DBUtil.SPECIAL_CHAR))
 		{
 			//用户网盘CIFS
@@ -101,6 +106,11 @@ public class DefaultDBAccessLoder implements DBAccessLoader {
 		if("IPC$".equalsIgnoreCase(shareName) || StringUtils.isEmpty(shareName))
 		{
 			//空连接
+			return true;
+		}
+		else if(null != shareName && shareName.toLowerCase().startsWith("was"))
+		{
+			//was连接
 			return true;
 		}
 		else if(shareName.endsWith(DBUtil.SPECIAL_CHAR))

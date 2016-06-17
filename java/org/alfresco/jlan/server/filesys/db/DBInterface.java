@@ -23,6 +23,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.sql.SQLException;
+import java.util.Set;
 
 import org.alfresco.jlan.server.config.InvalidConfigurationException;
 import org.alfresco.jlan.server.filesys.AccessDeniedException;
@@ -222,7 +223,7 @@ public interface DBInterface {
   /**
    * 保存上传文件类
    */
-  public int saveFileArchive(String userName, String tempDir, int fileId,File uploadFile,String shareName,FileSegment fileSeg)throws SQLException ,DBException,IOException;
+  public int saveFileArchive(String userName, String tempDir, int fileId,File uploadFile,String shareName,FileSegment fileSeg,String ipAddress)throws SQLException ,DBException,IOException;
   /**
    * Get information for a file or folder
    *
@@ -267,9 +268,10 @@ public interface DBInterface {
    * @param newDir int
    * @exception DBException
    * @exception FileNotFoundException
+ * @throws FileExistsException 
    */
-  public int renameFileRecord(int dirId, int fid, String newName, int newDir,String sharePath)
-		throws DBException, FileNotFoundException;
+  public int renameFileRecord(int dirId, int fid, String newName, int newDir,String sharePath,String ipAddress)
+		throws DBException, FileNotFoundException, FileExistsException;
   
   /**
    * Rename a file stream
@@ -349,4 +351,13 @@ public interface DBInterface {
 	 * @throws DBException
 	 */
 	public void modifyFileTemporaryFile(int fid,FileSegmentInfo fileSegInfo,String sharePath) throws DBException;
+	
+
+	public int getBaseFileId();
+	public Set<String> resetFileRenamed(String fileName);
+
+	public void setBaseFileId(int i);
+	
+	public long renameFolderRecord(long newDirId, long oldDirId, long fId, int userId, String newName,
+			String shareName,String ipAddress) throws DBException, FileNotFoundException, FileExistsException;
 }

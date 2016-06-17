@@ -1,13 +1,5 @@
 package com.util;
 
-/*
- * Copyright (c) LinkApp Team All rights reserved.
- * 版权归LinkApp研发团队所有
- * 任何的侵权、盗版行为均将追究其法律责任
- * 
- * The LinkApp Project
- * http://www.linkapp.cn
- */
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -25,7 +17,7 @@ import com.google.gson.JsonArray;
 
 /**
  * 网盘工具类
- * @author Leixiqing
+ * @author lk
  *
  */
 public class DiskUtil {
@@ -56,7 +48,14 @@ public class DiskUtil {
 			}
 			java.util.Calendar c = java.util.Calendar.getInstance();
 			java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("yyyy/MM/dd/HHmmssSSSS");		
-			path = "/archive/db/"+f.format(c.getTime())+"_"+md5+".LFS";
+			if(AESUtil.encrypt)
+			{
+				path = "/archive/db/"+f.format(c.getTime())+"_"+md5+".LFS";//加密存储
+			}
+			else
+			{
+				path = "/archive/db/"+f.format(c.getTime())+"_"+md5+".LFN";//非加密存储
+			}
 			path = DiskUtil.replacePath(path);
 		}catch (Exception e) {
 			e.printStackTrace();
@@ -510,6 +509,40 @@ public class DiskUtil {
 		return fristPath;
 	}
 	
+
+//	public static String checkShareName(String path)
+//	{
+//		
+//	}
+	
+
+	/**
+	 * 
+	 * 因为path可能是不正确的，从而需要从TreeConnection已有的文件中获取shareName
+	 * —— 其实大部分情况下shareName 是正确的。 这么做主要是因为文件另存为的时候， shareName不正确； 
+	 * 
+	 * 
+	 * 双重保证，以免获取不到shareName
+	 * 
+	 * @param path
+	 * @param fileFullName
+	 * @return
+	 */
+	public static String findFristPath(String path,String fileFullName) {
+		String shareName = findFristPath(path);
+		if (!shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE) && !shareName.equals(DBUtil.SHARENAME_COMMFILE)
+				&& !shareName.equals(DBUtil.SHARENAME_RECIVEFILE)) {
+			shareName = DiskUtil.findFristPath(fileFullName);
+			
+			if (!shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE) && !shareName.equals(DBUtil.SHARENAME_COMMFILE)
+					&& !shareName.equals(DBUtil.SHARENAME_RECIVEFILE)) {
+				shareName = DBUtil.SHARENAME_COMMFILE;// 默认设置为		SHARENAME_COMMFILE ，因为fileFullName可能为""。。。
+				//throw new RuntimeException("we just can't get the shareName !");
+			}
+		}
+		//logger.debug("DiskUtil.findFristPath() +++ " + shareName);
+		return shareName;
+	}
 	
 	/**
 	 * 获得归档文件占用空间

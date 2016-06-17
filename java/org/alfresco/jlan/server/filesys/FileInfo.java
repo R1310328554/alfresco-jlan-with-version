@@ -93,6 +93,9 @@ public class FileInfo {
 	// Change date/time (for Un*x inode changes)
 
 	private long m_changeDate;
+	
+	//File info obj last ModifyDate
+	private long m_lastModifyDate; //新增加，用于判断获得最新文件属性
 
 	// Filesystem allocation size
 
@@ -460,6 +463,8 @@ public class FileInfo {
 	public boolean hasChangeDateTime() {
 		return m_changeDate == 0L ? false : true;
 	}
+	
+	
 
 	/**
 	 * Determine if the creation date/time details are available.
@@ -726,6 +731,28 @@ public class FileInfo {
 
 		m_createDate = timesec;
 	}
+	
+
+	/**
+	 * Get the FileInfo Obje date/time for the file.
+	 * 
+	 * @param timesec long
+	 */
+	public long getInfoLastModifyTime() {
+		return m_lastModifyDate;
+	}
+	
+	
+	/**
+	 * Set the FileInfo Obje date/time for the file.
+	 * 
+	 * @param timesec long
+	 */
+	public void setInfoLastModifyTime(long timesec) {
+
+		// Set the FileInfo Obje date/time
+		m_lastModifyDate = timesec;
+	}
 
 	/**
 	 * Set/clear the delete on close flag
@@ -946,6 +973,8 @@ public class FileInfo {
 		return m_flags;
 	}
 	
+	
+	
 	/**
 	 * Return the setter flags as a string
 	 * 
@@ -989,7 +1018,7 @@ public class FileInfo {
 	 * @return File information string.
 	 */
 	public String toString() {
-		StringBuffer str = new StringBuffer();
+		StringBuffer str = new StringBuffer(40);
 
 		// Append the path, and terminate with a trailing '\'
 

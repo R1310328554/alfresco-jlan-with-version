@@ -50,7 +50,7 @@ import com.util.DiskUtil;
  *
  * @author gkspencer
  */
-public abstract class JdbcDBLInterface implements DBInterface, DBConnectionPoolListener {
+public abstract class JdbcDBWasLInterface implements DBInterface, DBConnectionPoolListener {
 
 	//	Constants
 	//
@@ -60,12 +60,12 @@ public abstract class JdbcDBLInterface implements DBInterface, DBConnectionPoolL
 //	public final static String StreamsTable	    	= "jweb_JLANStreams";
 //	public final static String FileRevisionTable	= "jweb_JLANFileRevisions";
 //	public final static String RetentionTable		= "jweb_JLANRetain";
-	public final static String QueueTable			= "jweb_JLANQueue";
-	public final static String TransactQueueTable	= "jweb_JLANTransQueue";
+	public final static String QueueTable			= "jweb_JLAN_WasCommon_Queue";
+	public final static String TransactQueueTable	= "jweb_JLAN_WasCommon_TransQueue";
 //	public final static String DataTable			= "jweb_JLANData";
-	public final static String JarDataTable			= "jweb_JLANJarData";
-	public final static String ObjectIdTable		= "jweb_JLANObjectIds";
-	public final static String SymLinkTable       	= "jweb_JLANSymLinks";
+	public final static String JarDataTable			= "jweb_JLANJarData_Was";
+	public final static String ObjectIdTable		= "jweb_JLANObjectIds_Was";
+	public final static String SymLinkTable       	= "jweb_JLANSymLinks_Was";
 	
 	//	Number of connections to allocate in the connection pool
 	
@@ -158,7 +158,7 @@ public abstract class JdbcDBLInterface implements DBInterface, DBConnectionPoolL
   /**
    * Default constructor
    */
-  public JdbcDBLInterface() {
+  public JdbcDBWasLInterface() {
     m_features = getSupportedFeatures();
   }
   
@@ -1224,16 +1224,27 @@ public abstract class JdbcDBLInterface implements DBInterface, DBConnectionPoolL
   
 
 	public int getBaseFileId() {
-		return -1;
+		// TODO Auto-generated method stub
+		return 0;
 	}
+
 	public Set<String> resetFileRenamed(String fileName) {
+		// TODO Auto-generated method stub
 		return null;
 	}
 
 	public void setBaseFileId(int i) {
+		// TODO Auto-generated method stub
 		
 	}
-	
-	public abstract long renameFolderRecord(long newDirId, long oldDirId, long fId, int userId, String newName,
-			String shareName, String ipAddress) throws DBException, FileNotFoundException, FileExistsException;
+
+	/**
+	 * dump impl
+	 */
+	public long renameFolderRecord(long newDirId, long oldDirId, long fId, int userId, String newName,
+			String shareName, String ipAddress) throws DBException, FileNotFoundException, FileExistsException {
+		return -1;
+	}
+		
+  
 }

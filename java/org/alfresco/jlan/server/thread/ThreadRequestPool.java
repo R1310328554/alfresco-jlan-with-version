@@ -123,8 +123,8 @@ public class ThreadRequestPool {
 				try {
 
 					// Wait for an request to be queued
-
 					threadReq = m_queue.removeRequest();
+					//System.out.println(" m_queue.numberOfRequests() : "+m_queue.numberOfRequests());
 				}
 				catch (InterruptedException ex) {
 

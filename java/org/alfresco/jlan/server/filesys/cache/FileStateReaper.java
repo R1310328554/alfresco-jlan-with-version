@@ -35,7 +35,7 @@ public class FileStateReaper implements Runnable {
 
     // Default expire check thread interval
 
-    private static final long DEFAULT_EXPIRECHECK = 15000;
+    private static final long DEFAULT_EXPIRECHECK = 10000;//减少时间以解决网盘修改了某文件而NAS不知情，因此需要重新加载文件的间隔
 
     // Wakeup interval for the expire file state checker thread
 

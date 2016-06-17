@@ -120,6 +120,19 @@ public class TreeConnection {
     return idx;
   }
 
+
+  public synchronized String getFullName() {
+	if (m_files != null) {
+		
+	  	for (int i = 0; i < m_files.length; i++) {
+	    	if(m_files[i] != null){
+	    		if(m_files[i] != null)return m_files[i].getFullName();
+	    	}
+		}
+	}
+	return "";
+  }
+  
   /**
    * Close the tree connection, release resources.
    *

@@ -476,7 +476,7 @@ public class NotifyRequest {
 	 * @return String
 	 */
 	public String toString() {
-		StringBuffer str = new StringBuffer();
+		StringBuffer str = new StringBuffer(150);
 		
 		str.append("[");
 		

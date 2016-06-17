@@ -219,7 +219,7 @@ public class NTIOCtl {
    * @return String
    */
   public final static String asString(int ioctl) {
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(70);
     
     str.append("[Func:");
     str.append(getFunctionCode(ioctl));

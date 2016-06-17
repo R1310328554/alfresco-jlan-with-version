@@ -1529,6 +1529,9 @@ public class SMBSrvSession extends SrvSession implements Runnable {
 			catch (Exception ex) {
 	
 				// Output the exception details
+				
+				
+				Debug.println("XXXXXXXXXXXX +++++++  SMBSrvSession.processPacket() " +ex.getMessage());
 	
 				if ( isShutdown() == false) {
 					debugPrintln("Closing session due to exception");
@@ -2231,6 +2234,16 @@ public class SMBSrvSession extends SrvSession implements Runnable {
 		return discCnt;
 	}
 
+	/**
+	 * 获取VirtualCircuitList
+	 * 
+	 */
+	public VirtualCircuitList getVcircuits() {
+		return m_vcircuits;
+		
+	}
+	
+	
 	/**
 	 * Set the hostname the client used to mount a network drive
 	 * 

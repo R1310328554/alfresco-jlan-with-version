@@ -12,7 +12,7 @@ import org.apache.log4j.Logger;
  * 对文件加密/解密和压缩/解压缩对象类
  * AES压缩加密/解压缩解密，网上一般用base64来对byte[]编码,其实不需要，指定AES/CBC/PKCS5Padding
  * 来指定加密解密时候位数不对的情况下，用pkcs5padding来附加位数，不过这个时候读解密的文件的时候，要多读16位的验证位就不会报异常
- * @author Leixiqing
+ * @author lk
  *
  */
 public class AESUtil {

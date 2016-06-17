@@ -1927,7 +1927,7 @@ public class PostgreSQLDBInterface extends JdbcDBInterface implements DBQueueInt
 	 * @exception DBException
 	 * @exception FileNotFoundException
 	 */
-	public int renameFileRecord(int dirId, int fid, String newName, int newDir,String shareName)
+	public int renameFileRecord(int dirId, int fid, String newName, int newDir,String shareName, String ipAddress)
 		throws DBException, FileNotFoundException {
 
 		// Rename a file/folder

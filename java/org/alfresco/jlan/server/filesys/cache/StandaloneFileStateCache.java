@@ -32,6 +32,9 @@ import org.alfresco.jlan.server.filesys.FileStatus;
 import org.alfresco.jlan.server.locking.OpLockDetails;
 import org.springframework.extensions.config.ConfigElement;
 
+import com.util.DBUtil;
+import com.util.DiskUtil;
+
 /**
  * File State Cache Class
  * 
@@ -145,6 +148,18 @@ public class StandaloneFileStateCache extends FileStateCache {
 			// Find the required file state, if it exists
 
 			state = m_stateCache.get(FileState.normalizePath(path, isCaseSensitive()));
+			
+			if (path.endsWith(".docx")) {
+
+//				state = new LocalFileState(path, isCaseSensitive());
+//	
+//				// Set the file state timeout and add to the cache
+//	
+//				state.setExpiryTime(System.currentTimeMillis() + 4000);//getFileStateExpireInterval());
+//				m_stateCache.put(state.getPath(), state);
+//				
+			}
+			
 	
 			// Check if we should create a new file state
 	
@@ -153,10 +168,14 @@ public class StandaloneFileStateCache extends FileStateCache {
 				// Create a new file state
 	
 				state = new LocalFileState(path, isCaseSensitive());
-	
+//				String ext = DiskUtil.getExt(path);
+//				if (DBUtil.SUPPORT_EXT.contains(ext)) {
+//					state.setExpiryTime(System.currentTimeMillis() + 5000);
+//				} else {
+					state.setExpiryTime(System.currentTimeMillis() + getFileStateExpireInterval());
+//				}
 				// Set the file state timeout and add to the cache
 	
-				state.setExpiryTime(System.currentTimeMillis() + getFileStateExpireInterval());
 				m_stateCache.put(state.getPath(), state);
 			}
 		}
@@ -369,14 +388,16 @@ public class StandaloneFileStateCache extends FileStateCache {
                 FileState state = entry.getValue();
     
      			if ( state != null && state.isPermanentState() == false) {
-    
 					// Check if the file state has expired and there are no open references to the
 					// file
-
-					if ( state.hasExpired(curTime) && state.getOpenCount() == 0) {
+//     				String ext = DiskUtil.getExt(state.getPath());
+//    				boolean b = DBUtil.SUPPORT_EXT.contains(ext);
+    						
+					if ( (state.hasExpired(curTime) && state.getOpenCount() == 0) 
+							//|| (b && !state.getPath().contains("~$"))
+						) {
 
 						// Check if there is a state listener
-
 						if ( hasStateListener() && getStateListener().fileStateExpired(state) == true) {
 
 							// Remove the expired file state

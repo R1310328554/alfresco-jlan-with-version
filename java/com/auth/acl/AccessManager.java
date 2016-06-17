@@ -82,6 +82,10 @@ public class AccessManager implements AccessControlManager {
 		String uname = info.getUserName();
 		log4j.debug(" checkAccess  for  user : " + uname);
 		try {
+			if(null != share.getName() && share.getName().toLowerCase().startsWith("was"))
+			{
+				return 2;//was直接返回有权限
+			}
 			if ("".equals(uname))
 				return accessOpt;
 			if (!accessLoder.hasAccess(uname, share.getName()))
@@ -224,6 +228,10 @@ public class AccessManager implements AccessControlManager {
 			throws ParseAccessException {
 		int accessVal = 0;
 		try {
+			if(null != shareName && shareName.toLowerCase().startsWith("was"))
+			{
+				return 2;//was直接返回有权限
+			}
 			String accessStr = accessLoder.LoadAccessByName(Username,shareName);
 			if (!"".equals(accessStr)) {
 				if (accessStr.indexOf("w") != -1)

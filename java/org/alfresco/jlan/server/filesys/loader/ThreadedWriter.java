@@ -35,7 +35,8 @@ public class ThreadedWriter {
 	
 	public static final int DefaultWorkerThreads			= 8;
 	public static final int MinimumWorkerThreads			= 4;
-	public static final int MaximumWorkerThreads			= 50;
+//	public static final int MaximumWorkerThreads			= 50;
+	public static final int MaximumWorkerThreads			= 100;
 
 	//	Queue of delayed write requests
 	

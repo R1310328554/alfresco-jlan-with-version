@@ -144,7 +144,7 @@ public class DeleteFileRequest extends FileRequest {
    * @return String
    */
   public String toString() {
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(60);
     
     str.append("[FID=");
     str.append(getFileId());

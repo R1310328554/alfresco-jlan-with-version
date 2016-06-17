@@ -347,7 +347,7 @@ public class SessionInfo implements DCEReadable {
 	 * @return String
 	 */
 	public String toString() {
-		StringBuffer str = new StringBuffer();
+		StringBuffer str = new StringBuffer(40);
 
 		str.append("[Client=");
 		str.append(getClientName());

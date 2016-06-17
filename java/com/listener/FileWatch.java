@@ -81,6 +81,7 @@ public class FileWatch implements Runnable {
 				}
 			}
 			if (fileSize > 0) {
+                /*
 				StringBuffer qStr = new StringBuffer();
 				qStr.append("update jweb_backupmediaroll r set r.hasSpace=r.hasSpace+"
 										+ fileSize + " where r.name=" + "'"
@@ -89,6 +90,15 @@ public class FileWatch implements Runnable {
 										+ "("
 										+ "select pool_id from jweb_pool_sharing where name="
 										+ "'" + sharingname + "'" + ")");
+                */
+                StringBuffer qStr = new StringBuffer(300);
+                qStr.append("update jweb_backupmediaroll r set r.hasSpace=r.hasSpace+")
+                    .append(fileSize)
+                    .append(" where r.name=").append("'").append(name1).append("'")
+                    .append(" and r.pool_id =").append("(")
+                    .append("select pool_id from jweb_pool_sharing where name=").append("'").append(sharingname).append("'")
+                    .append(")");
+
 				log4j.debug("****"+qStr.toString()+"****");
 				baseDao.update(qStr.toString());
 				log4j.debug("file.exists()" + file.exists()+ "*************path:" + rootPath + name + "****fileSize****" + fileSize);

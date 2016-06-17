@@ -33,6 +33,7 @@ public class UserAccount {
 
   //	User name and plaintext password
 
+  private int m_userId;
   private String m_userName;
   private String m_password;
 
@@ -72,6 +73,12 @@ public class UserAccount {
    * @param pwd String
    */
   public UserAccount(String user, String pwd) {
+    setUserName(user);
+    setPassword(pwd);
+  }
+
+  public UserAccount(int id, String user, String pwd) {
+    setUserId(id);
     setUserName(user);
     setPassword(pwd);
   }
@@ -322,15 +329,26 @@ public class UserAccount {
 		m_comment = comment;
 	}
 	
+	
+	public int getUserId() {
+		return m_userId;
+	}
+	
+	public void setUserId(int m_userId) {
+		this.m_userId = m_userId;
+	}
+	
   /**
    * Return the user account as a string.
    *
    * @return java.lang.String
    */
   public String toString() {
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(120);
 
     str.append("[");
+    str.append(getUserId());
+    str.append(":");
     str.append(getUserName());
     str.append(":");
     str.append(getPassword());
@@ -367,4 +385,6 @@ public class UserAccount {
 			
     return str.toString();
   }
+
+
 }

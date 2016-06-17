@@ -443,7 +443,7 @@ public class HazelCastClusterFileState extends ClusterFileState {
 	 * @return String
 	 */
 	public String toString() {
-	  StringBuffer str = new StringBuffer();
+	  StringBuffer str = new StringBuffer(90);
 	  
 	  str.append("[");
 	  str.append(getPath());

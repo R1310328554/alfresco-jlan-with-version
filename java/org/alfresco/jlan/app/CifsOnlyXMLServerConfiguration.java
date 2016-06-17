@@ -153,7 +153,8 @@ public class CifsOnlyXMLServerConfiguration extends ServerConfiguration {
 	// Default thread pool size
 	
 	private static final int DefaultThreadPoolInit	= 25;
-	private static final int DefaultThreadPoolMax	= 50;
+//	private static final int DefaultThreadPoolMax	= 50;
+	private static final int DefaultThreadPoolMax	= 150;
 	
 	// Default memory pool settings
 	
@@ -169,7 +170,8 @@ public class CifsOnlyXMLServerConfiguration extends ServerConfiguration {
 	// Memory pool allocation limits
 	
 	private static final int MemoryPoolMinimumAllocation	= 5;
-	private static final int MemoryPoolMaximumAllocation    = 500;
+//	private static final int MemoryPoolMaximumAllocation    = 500;
+	private static final int MemoryPoolMaximumAllocation    = 1500;
 	
 	// Maximum session timeout
 	
@@ -2252,8 +2254,8 @@ public class CifsOnlyXMLServerConfiguration extends ServerConfiguration {
 		}
 		else {
 
-			// Default to a 80Gb sized disk with 90% free space
-			diskInfo = new SrvDiskInfo(2560000, 64, 512, 2304000);
+			// Default to a 8000Gb sized disk with 90% free space
+			diskInfo = new SrvDiskInfo(256000000, 64, 512, 230400000);
 		}
 
 		// Check if a state cache is configured
@@ -2775,4 +2777,80 @@ public class CifsOnlyXMLServerConfiguration extends ServerConfiguration {
 
 		    log4j.debug(" ************ database shares loading success ************");
 		  }
-		}
+	  
+	  
+	  /*public void loadWasShare(FilesystemsConfigSection config) {
+		  log4j.debug("............this.share    " + this.shareMapper);
+
+		    if (this.shareMapper == null)
+		      return;
+		    log4j.debug(" ************ loading data shares ************");
+		    SharedDeviceList shareList = this.shareMapper.getShareList(null, null, false);
+
+		    Enumeration Shared = shareList.enumerateShares();
+		    for (int i = 0; i < shareList.numberOfShares(); ++i)
+		    {
+		     SharedDevice shared = (SharedDevice)Shared.nextElement() ;
+		     shared.setConfiguration(this);
+		     try {
+				if (shared.getInterface() instanceof DiskInterface) {
+					DiskSharedDevice diskDev = (DiskSharedDevice)shared;
+					DiskDeviceContext devCtx = diskDev.getDiskContext();
+					FileStateCache stateCache = null;
+					if ( devCtx.requiresStateCache() && stateCache == null) {
+						stateCache = new StandaloneFileStateCache();
+						stateCache.initializeCache( new GenericConfigElement( "stateCache"), this);
+					}
+					
+					if ( devCtx.requiresStateCache() == false && stateCache != null)
+						throw new InvalidConfigurationException( "Filesystem does not use state caching");
+
+					devCtx.setStateCache( stateCache);
+					
+					diskDev.setConfiguration( this);
+	              // Check if the filesystem uses the file state cache, if so then add to the file state reaper
+//	           // Add any access controls to the share
+	//
+//					diskDev.setAccessControlList(acls);
+
+	              // Check if the filesystem uses the file state cache, if so then add to the file state reaper
+	              
+	              if ( devCtx.hasStateCache()) {
+	                  
+	                  // Register the state cache with the reaper thread
+	                  
+	                  config.addFileStateCache( diskDev.getName(), devCtx.getStateCache());
+	              }
+	              
+					// Start the filesystem
+
+					devCtx.startFilesystem(diskDev);
+
+					// Pass the driver/context details to the state cache
+					
+					if ( devCtx.hasStateCache())
+						devCtx.getStateCache().setDriverDetails(diskDev);
+					
+					// Add the new share to the list of available shares
+
+					config.addShare(diskDev);
+				 }
+			} catch (InvalidDeviceInterfaceException e) {
+				e.printStackTrace();
+//			} catch (DeviceContextException e) {
+//				// TODO Auto-generated catch block
+//				e.printStackTrace();
+			} catch (InvalidConfigurationException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}   
+		     
+		      config.addShare(shared);
+		    }
+
+		    log4j.debug(" ************ database shares loading success ************");
+		  }*/
+}

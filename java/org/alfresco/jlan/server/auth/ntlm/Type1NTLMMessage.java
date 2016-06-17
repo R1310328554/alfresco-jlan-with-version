@@ -177,7 +177,7 @@ public class Type1NTLMMessage extends NTLMMessage {
    */
   public String toString() {
 
-    StringBuffer str = new StringBuffer();
+    StringBuffer str = new StringBuffer(80);
 
     str.append("[Type1:0x");
     str.append(Integer.toHexString(getFlags()));

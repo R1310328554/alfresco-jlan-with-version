@@ -715,7 +715,7 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 		catch (SMBSrvException ex) {
 
 			// Remove the session setup object for this logon attempt
-			log4j.error(ex);
+			log4j.warn(ex);
 			sess.removeSetupObject(client.getProcessId());
 
 			// Rethrow the exception
@@ -873,7 +873,7 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 		respPkt.setByteCount(0);
 
 		respPkt.setTreeId( loggedOn ? 0 : 0xFFFF);
-		respPkt.setUserId(uid);
+		respPkt.setUserId(uid);// 注意： 此处的uid 非 用户的userId 
 
 		// Set the various flags
 
@@ -996,7 +996,6 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 			Type3NTLMMessage type3Msg = new Type3NTLMMessage(secbuf, secpos, seclen, unicode);
 
 			// Make sure a type 2 message was stored in the first stage of the session setup
-
 			if ( sess.hasSetupObject(client.getProcessId()) == false
 					|| sess.getSetupObject(client.getProcessId()) instanceof Type2NTLMMessage == false) {
 
@@ -1480,6 +1479,7 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 
 			// Store the full user name in the client information, indicate that this is not a guest
 			// logon
+			client.setUid(user.getUserId());
 			client.setUserName(userName);
 //			client.setGuest(sts == AUTH_GUEST ? true : false);
 			client.setGuest(false);
@@ -1542,6 +1542,7 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 			// Store the full user name in the client information, indicate that this is not a guest
 			// logon
 
+			client.setUid(user.getUserId());
 			client.setUserName(userName);
 //			client.setGuest(sts == AUTH_GUEST ? true : false);
 			client.setGuest(false);
@@ -1549,6 +1550,17 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 			// Indicate that the session is logged on
 
 			sess.setLoggedOn(true);
+		}
+		else if(userName.toLowerCase().startsWith(DBUtil.WAS_LOCALUSER_PREFIX))
+		{
+			client.setUserName(userName);
+			client.setGuest(true);
+
+			// Indicate that the session is logged on
+
+			sess.setLoggedOn(true);
+			// Log a warning, user does not exist
+			log4j.info("[SMB] doNTLMv2Logon Linkapp_ CloudEdit Login as admin , skip auth :" + client.getUserName());
 		}
 		else {
 
@@ -1670,6 +1682,7 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 						
 						if(j!=clientHmac.length)
 						{
+							
 							// Return a logon failure
 							log4j.warn("logo failure");
 							throw new SMBSrvException(SMBStatus.NTLogonFailure, SMBStatus.ErrDos, SMBStatus.DOSAccessDenied);
@@ -1684,6 +1697,7 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 				// Store the full user name in the client information, indicate that this is not a
 				// guest logon
 
+				client.setUid(user.getUserId());
 				client.setUserName(userName);
 				client.setGuest(false);
 
@@ -1694,12 +1708,23 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 			catch (Exception ex) {
 
 				// Log the error
-				log4j.error(ex);
+				log4j.warn(ex);
 
 				// Return a logon failure
 
 				throw new SMBSrvException(SMBStatus.NTLogonFailure, SMBStatus.ErrDos, SMBStatus.DOSAccessDenied);
 			}
+		}
+		else if(userName.toLowerCase().startsWith(DBUtil.WAS_LOCALUSER_PREFIX))
+		{
+			client.setUserName(userName);
+			client.setGuest(true);
+
+			// Indicate that the session is logged on
+
+			sess.setLoggedOn(true);
+			// Log a warning, user does not exist
+			log4j.info("[SMB] doNTLMv2Logon Linkapp_ CloudEdit Login as admin , skip auth :" + client.getUserName());
 		}
 		else {
 
@@ -1716,12 +1741,24 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 		
 		UserAccount user = getUserDetails2(userName);
 		if ( user != null) {
+			client.setUid(user.getUserId());
 			client.setUserName(userName);
 			client.setGuest(false);
 
 			// Indicate that the session is logged on
 
 			sess.setLoggedOn(true);
+		} 
+		else if(userName.toLowerCase().startsWith(DBUtil.WAS_LOCALUSER_PREFIX))
+		{
+			client.setUserName(userName);
+			client.setGuest(true);
+
+			// Indicate that the session is logged on
+
+			sess.setLoggedOn(true);
+			// Log a warning, user does not exist
+			log4j.info("[SMB] doNTLMv2Logon Linkapp_ CloudEdit Login as admin , skip auth :" + client.getUserName());
 		}
 		else {
 
@@ -1837,6 +1874,17 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 				throw new SMBSrvException(SMBStatus.NTLogonFailure, SMBStatus.ErrDos, SMBStatus.DOSAccessDenied);
 			}
 		}
+		else if(client.getUserName().toLowerCase().startsWith(DBUtil.WAS_LOCALUSER_PREFIX))
+		{
+			client.setUserName(client.getUserName());
+			client.setGuest(true);
+
+			// Indicate that the session is logged on
+
+			sess.setLoggedOn(true);
+			// Log a warning, user does not exist
+			log4j.info("[SMB] doNTLMv2Logon.Linkapp_ CloudEdit Login as admin , skip auth" + client.getUserName());
+		}
 		else {
 
 			// Log a warning, user does not exist
@@ -1855,6 +1903,17 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 				// Indicate that the session is logged on
 
 				sess.setLoggedOn(true);
+			}
+			else if(client.getUserName().toLowerCase().startsWith(DBUtil.WAS_LOCALUSER_PREFIX))
+			{
+				client.setUserName(client.getUserName());
+				client.setGuest(true);
+
+				// Indicate that the session is logged on
+
+				sess.setLoggedOn(true);
+				// Log a warning, user does not exist
+				log4j.info("[SMB] doNTLMv2Logon.Linkapp_ CloudEdit Login as admin , skip auth" + client.getUserName());
 			}
 			else {
 
@@ -2025,12 +2084,24 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 			// Store the full user name in the client information, indicate that this is not a guest
 			// logon
 
+			client.setUid(user.getUserId());
 			client.setUserName(userName);
 			client.setGuest(false);
 
 			// Indicate that the session is logged on
 
 			sess.setLoggedOn(true);
+		}
+		else if(userName.toLowerCase().startsWith(DBUtil.WAS_LOCALUSER_PREFIX))
+		{
+			client.setUserName(userName);
+			client.setGuest(true);
+
+			// Indicate that the session is logged on
+
+			sess.setLoggedOn(true);
+			// Log a warning, user does not exist
+			log4j.warn("[SMB] doNTLMv2SessionKeyLogon.Linkapp_ CloudEdit Login as admin , skip auth" + client.getUserName());
 		}
 		else {
 
@@ -2046,12 +2117,24 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 	}else{
 			UserAccount user = getUserDetails2(userName);
 			if ( user != null) {
+				client.setUid(user.getUserId());
 				client.setUserName(userName);
 				client.setGuest(false);
 
 				// Indicate that the session is logged on
 
 				sess.setLoggedOn(true);
+			}
+			else if(userName.toLowerCase().startsWith(DBUtil.WAS_LOCALUSER_PREFIX))
+			{
+				client.setUserName(userName);
+				client.setGuest(true);
+
+				// Indicate that the session is logged on
+
+				sess.setLoggedOn(true);
+				// Log a warning, user does not exist
+				log4j.warn("[SMB] doNTLMv2SessionKeyLogon.Linkapp_ CloudEdit Login as admin , skip auth" + client.getUserName());
 			}
 			else {
 
@@ -2297,19 +2380,28 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 	public UserAccount getUserDetails1(String name){
 		UserAccount account = null;
 		try {
-			String sql = "SELECT username, security_hash as password ,  '1' AS  ENABLE  FROM `jweb_users` WHERE lower(username)  = lower('"+name+"');";
+			String sql = "SELECT  a.id, a.username, a.security_hash as password ,  '1' AS  ENABLE, b.cifs_enabled  FROM `jweb_users` a " +
+					" LEFT JOIN jweb_user_info b on a.id = b.userid " +
+					" WHERE lower(username)  = lower('"+name+"')" +
+					" AND a.status = 1";
 			JdbcTemplate springJdbcTemp = (JdbcTemplate) SpringUtil.getBean("springJdbcTemp");
 			List<Map<String, Object>> userList = springJdbcTemp.queryForList(sql);
 			if(null != userList && userList.size()>0)
 			{
 				Map<String, Object> map = userList.get(0);
+				int userid = null !=map.get("id")?Integer.parseInt(map.get("id").toString()):-1;
 				String username = null !=map.get("username")?map.get("username").toString():"";
 				String pwd = null !=map.get("password")?map.get("password").toString():"";
-				if (null != pwd) {
-					pwd = AESUtil.decryptHexStrToStr(pwd, SECURITYKEY).trim();
+				String cifsEnabled = null !=map.get("cifs_enabled")?map.get("cifs_enabled").toString():"";
+				if (cifsEnabled.equals("0")) {
+					log4j.error("getUserDetails1 by userName returned empty cauz userid is cifs_enabled is 0");
+					return null;
+				} else {
+					if (null != pwd) {
+						pwd = AESUtil.decryptHexStrToStr(pwd, SECURITYKEY).trim();
+					}
+					account = new UserAccount(userid,username,pwd);
 				}
-				account = new UserAccount(username,pwd);
-				
 			}
 			else
 			{
@@ -2317,10 +2409,9 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 			}
 		}catch (Exception ex) {
 			log4j.error(ex);
-		}
-		return account;
+		}		return account;
 	}
-	/**
+	/*
 	 * 新加入的方法 企业级验证初始化权限检查 
 	 * @param name
 	 * @return
@@ -2329,22 +2420,32 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 	public UserAccount getUserDetails2(String name){
 		UserAccount account = null;
 		try {
-			String sql = "SELECT username, security_hash as password ,  '1' AS  ENABLE  FROM `jweb_users` WHERE lower(username)  = lower('"+name+"');";
+			String sql = "SELECT a.id, a.username, a.security_hash as password ,  '1' AS  ENABLE, b.cifs_enabled  FROM `jweb_users` a " +
+					" LEFT JOIN jweb_user_info b on a.id = b.userid " +
+					" WHERE lower(username)  = lower('"+name+"')" +
+					" AND a.status = 1";
 			JdbcTemplate springJdbcTemp = (JdbcTemplate) SpringUtil.getBean("springJdbcTemp");
 			List<Map<String, Object>> userList = springJdbcTemp.queryForList(sql);
 			if(null != userList && userList.size()>0)
 			{
 				Map<String, Object> map = userList.get(0);
+				int userid = null !=map.get("id")?Integer.parseInt(map.get("id").toString()):-1;
 				String username = null !=map.get("username")?map.get("username").toString():"";
 				String pwd = null !=map.get("password")?map.get("password").toString():"";
+				String cifsEnabled = null !=map.get("cifs_enabled")?map.get("cifs_enabled").toString():"";
+				if (cifsEnabled.equals("0")) {
+					log4j.error("getUserDetails2 by userName returned empty cauz userid is cifs_enabled is 0");
+					return null;
+				} else {
+					account = new UserAccount(userid,username,pwd);
+				}
 	//			if (null != pwd) {
 	//				pwd = AESUtil.decryptHexStrToStr(pwd, SECURITYKEY).trim();
 	//			}
-				account = new UserAccount(username,pwd);
 			}
 			else
 			{
-				log4j.warn("getUserDetails2 by userName not exist!");
+				log4j.warn("getUserDetails2 by userName not exist! name:"+name);
 			}
 		}catch (Exception ex) {
 			log4j.error(ex);

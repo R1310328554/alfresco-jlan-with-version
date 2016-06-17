@@ -31,6 +31,8 @@ public class DBFileInfo extends FileInfo {
 	//	Full file name
 	
 	private String m_fullName;
+	private boolean m_locked;
+	
 	
 	/**
 	 * Class constructor
@@ -72,6 +74,23 @@ public class DBFileInfo extends FileInfo {
 	public final void setFullName(String name) {
 		m_fullName = name;
 	}
+	
+	
+	/**
+	 * 
+	 */
+	public final boolean isLocked() {
+		return m_locked;
+	}
+	
+	/**
+	 * 
+	 */
+	public final void setLocked(boolean locked) {
+		m_locked = locked;
+	}
+	
+	
 
 	/**
 	 * Return the file information as a string

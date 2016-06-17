@@ -45,7 +45,8 @@ public class VirtualCircuit {
   //  Default and maximum number of connection slots
 
   public static final int DefaultConnections = 4;
-  public static final int MaxConnections    = 16;
+//  public static final int MaxConnections    = 16;
+  public static final int MaxConnections    = 1600;//默认情况下，连接槽的最大数量
 
   //  Tree ids are 16bit values
   
@@ -54,7 +55,8 @@ public class VirtualCircuit {
   //  Default and maximum number of search slots
 
   private static final int DefaultSearches  = 8;
-  private static final int MaxSearches      = 256;
+//  private static final int MaxSearches      = 256;
+  private static final int MaxSearches      = 2560;
   
   // Invalid UID value
   
@@ -458,6 +460,17 @@ public class VirtualCircuit {
   public synchronized final void setLoggedOn(boolean loggedOn) {
 	  m_loggedOn = loggedOn;
   }
+
+  /**
+   * 
+   * 获取所有的TreeConnection
+   * 
+   * @return
+   */
+  public Map<Integer, TreeConnection> getConnections() {
+	return m_connections;
+  }
+  
   
   /**
    * Return the virtual circuit details as a string
@@ -481,4 +494,6 @@ public class VirtualCircuit {
     
     return str.toString();
   }
+
+
 }

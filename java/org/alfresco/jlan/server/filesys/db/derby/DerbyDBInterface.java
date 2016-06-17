@@ -1810,7 +1810,7 @@ public class DerbyDBInterface extends JdbcDBInterface implements DBQueueInterfac
 	 * @exception DBException
 	 * @exception FileNotFoundException
 	 */
-	public int renameFileRecord(int dirId, int fid, String newName, int newDir,String shareName)
+	public int renameFileRecord(int dirId, int fid, String newName, int newDir,String shareName, String ipAddress)
 		throws DBException, FileNotFoundException {
 
 		// Rename a file/folder
@@ -4079,7 +4079,7 @@ public class DerbyDBInterface extends JdbcDBInterface implements DBQueueInterfac
 //		return rollPath;
 //	}
 
-	public int saveFileArchive(String userName, String tempDir, int fileId,File uploadFile,String shareName,FileSegment fileSeg)throws SQLException ,DBException,IOException {
+	public int saveFileArchive(String userName, String tempDir, int fileId,File uploadFile,String shareName,FileSegment fileSeg, String ipAddress)throws SQLException ,DBException,IOException {
 		// TODO Auto-generated method stub
 		return 0;
 	}

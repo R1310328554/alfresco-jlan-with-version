@@ -130,7 +130,7 @@ public interface DBDataInterface {
 	* 保存上传文件类
  * @param firstPath 
 	   */
-  public int saveFileArchive(String userName, String tempDir, int fileId,File uploadFile,String shareName,FileSegment fileSeg)throws SQLException ,DBException,IOException;
+  public int saveFileArchive(String userName, String tempDir, int fileId,File uploadFile,String shareName,FileSegment fileSeg,String ipAddress)throws SQLException ,DBException,IOException;
 	
 //  public void modifyFileTemporaryFile(int fid, String temporaryFile) throws DBException;
 }

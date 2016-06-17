@@ -343,7 +343,7 @@ public class WorkstationInfo implements DCEWriteable, DCEReadable {
 	 * @return String
 	 */
 	public String toString() {
-		StringBuffer str = new StringBuffer();
+		StringBuffer str = new StringBuffer(50);
 		str.append("[");
 
 		str.append(getWorkstationName());
