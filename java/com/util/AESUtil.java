@@ -7,6 +7,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.security.Key;
 import java.security.SecureRandom;
+import java.util.Date;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -38,7 +39,6 @@ public class AESUtil {
 	private static Key headerKey = new SecretKeySpec("fe1b9a223ba095ff".getBytes(), "AES");
 	private static String publicKeyValue = "";
 	private static String privateKeyValue = "";
-	public static boolean encrypt = false;//是否加密
 	
 	/**
 	 * 初始化
@@ -166,22 +166,16 @@ public class AESUtil {
 	 */
 	public static byte[] decryptByte(byte[] b,int pos,int length) throws Exception
 	{
-		try{
-			SecureRandom sr = new SecureRandom();
-			Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-			IvParameterSpec spec = new IvParameterSpec(privateKey.getEncoded());
-			cipher.init(Cipher.DECRYPT_MODE, privateKey, spec, sr);
-			int len = b.length;
-			if(length>0)
-			{
-				len = length;
-			}		
-			return cipher.doFinal(b, pos, len);
-		}
-		catch(javax.crypto.BadPaddingException e)
+		SecureRandom sr = new SecureRandom();
+		Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+		IvParameterSpec spec = new IvParameterSpec(privateKey.getEncoded());
+		cipher.init(Cipher.DECRYPT_MODE, privateKey, spec, sr);
+		int len = b.length;
+		if(length>0)
 		{
-			return AESUtilOld.decryptByte(b, pos, length);
-		}
+			len = length;
+		}		
+		return cipher.doFinal(b, pos, len);
 	}
 	
 	/**
@@ -202,38 +196,23 @@ public class AESUtil {
 		{
 			if(inFile.exists())
 			{
-				if (!outFile.exists()) outFile.getParentFile().mkdirs();//建立目录
-				if(outFile.getName().endsWith(".LFS"))
+				if(inFile.length()>bigFileSize)//大文件
 				{
-					//加密存储
-					if(inFile.length()>bigFileSize)//大文件
-					{
-						//用大文件加密方式局部加密
-						return encryptBigFile(inFile,outFile);
-					}
-					fis = new FileInputStream(inFile);
-					fos = new FileOutputStream(outFile);
-					byte[] eByte = new byte[eSize];
-					int len;
-					while ((len = fis.read(eByte)) != -1) {
-						fos.write(encryptByte(eByte,0,len));
-					}
-					fos.close();
-					fis.close();
+					//用大文件加密方式局部加密
+					return encryptBigFile(inFile,outFile);
 				}
-				else
-				{	
-					//非加密
-					fis = new FileInputStream(inFile);
-					fos = new FileOutputStream(outFile);
-					byte[] eByte = new byte[eSize];
-					int len;
-					while ((len = fis.read(eByte)) != -1) {
-						fos.write(eByte,0,len);
-					}
-					fos.close();
-					fis.close();
+				if (!outFile.exists()) outFile.getParentFile().mkdirs();//建立目录
+				
+				fis = new FileInputStream(inFile);
+				fos = new FileOutputStream(outFile);
+				byte[] eByte = new byte[eSize];
+				int len;
+				while ((len = fis.read(eByte)) != -1) {
+					fos.write(encryptByte(eByte,0,len));
 				}
+				fos.close();
+				fis.close();
+				
 				flag = true;//成功
 			}
 			else
@@ -289,7 +268,7 @@ public class AESUtil {
 				fos = new FileOutputStream(outFile);
 				//header 
 				String sTag = padRight(aesFileTag,1);
-				String nLeve = "S";//F全部,S开始,N不加密
+				String nLeve = "S";//F全部,S开始,E结束
 				String sInfo = "<LYSINFO size=\""+inFile.length()+"\" eSize=\""+eSize+"\" bit=\"128\" nLeve=\""+nLeve+"\" key1=\""+publicKeyValue+"\" key2=\""+privateKeyValue+"\"/>";
 //				//加密不够补位
 				int nTail =sInfo.getBytes("UTF-8").length%16;
@@ -368,28 +347,16 @@ public class AESUtil {
 			if(null != fis)
 			{
 				if (!outFile.exists()) outFile.getParentFile().mkdirs();//建立目录
-				if(outFile.getName().endsWith(".LFS"))
-				{//加密存储
-					fos = new FileOutputStream(outFile);
-					byte[] b = new byte[eSize];
-					int len;
-					while ((len = fis.read(b)) != -1) {
-						fos.write(encryptByte(b,0,len));
-					}
-					fos.close();
-					fis.close();
+				
+				fos = new FileOutputStream(outFile);
+				byte[] b = new byte[eSize];
+				int len;
+				while ((len = fis.read(b)) != -1) {
+					fos.write(encryptByte(b,0,len));
 				}
-				else
-				{
-					fos = new FileOutputStream(outFile);
-					byte[] b = new byte[eSize];
-					int len;
-					while ((len = fis.read(b)) != -1) {
-						fos.write(b,0,len);
-					}
-					fos.close();
-					fis.close();
-				}
+				fos.close();
+				fis.close();
+				
 				flag = true;//成功
 			}
 			else
@@ -437,42 +404,26 @@ public class AESUtil {
 			if(inFile.exists())
 			{
 				if (!outFile.exists()) outFile.getParentFile().mkdirs();//建立目录
-				if(inFile.getName().endsWith(".LFS"))
+				fis = new FileInputStream(inFile);
+				byte[] bTag = new byte[10];
+				fis.read(bTag);
+				String fTag = new String(bTag).trim();
+				if(aesFileTag.equalsIgnoreCase(fTag))
 				{
-					//加密存储
-					fis = new FileInputStream(inFile);
-					byte[] bTag = new byte[10];
-					fis.read(bTag);
-					String fTag = new String(bTag).trim();
-					if(aesFileTag.equalsIgnoreCase(fTag))
-					{
-						logger.debug(fTag+" , f:"+fTag.equalsIgnoreCase(aesFileTag));
-						return decryptBigFile(inFile,outFile);//采用大文件方式
-					}
-					//采用普通加密方式()
-					fis = new FileInputStream(inFile);
-					fos = new FileOutputStream(outFile);
-					byte[] dByte = new byte[dSize];
-					int len;
-					while ((len = fis.read(dByte)) != -1) {
-						fos.write(decryptByte(dByte,0,len));
-					}
-					fos.close();
-					fis.close();
+					logger.debug(fTag+" , f:"+fTag.equalsIgnoreCase(aesFileTag));
+					return decryptBigFile(inFile,outFile);//采用大文件方式
 				}
-				else
-				{
-					//非加密
-					fis = new FileInputStream(inFile);
-					fos = new FileOutputStream(outFile);
-					byte[] dByte = new byte[eSize];//非加密不需要用dSize
-					int len;
-					while ((len = fis.read(dByte)) != -1) {
-						fos.write(dByte,0,len);
-					}
-					fos.close();
-					fis.close();
+				//采用普通加密方式()
+				fis = new FileInputStream(inFile);
+				fos = new FileOutputStream(outFile);
+				byte[] dByte = new byte[dSize];
+				int len;
+				while ((len = fis.read(dByte)) != -1) {
+					fos.write(decryptByte(dByte,0,len));
 				}
+				fos.close();
+				fis.close();
+				
 				flag = true;
 			}
 			else
@@ -714,10 +665,6 @@ public class AESUtil {
 							fos.write(dByte,0,len);
 						}
 					}
-					else if("N".equalsIgnoreCase(nLeve))
-					{
-						fos.write(dByte,0,len);
-					}
 					else
 					{
 						fos.write(decryptByte(dByte,0,len));
@@ -760,146 +707,6 @@ public class AESUtil {
 	 * @param destFile
 	 * @param privateKey
 	 * @throws Exception
-	 *//*
-	public static FileInputStream decryptFileToInputStream(File inFile) throws Exception {
-		if(null == privateKey)
-		{
-			logger.error("软件密钥错误！不能解密文件");
-			return null;
-		}
-		FileInputStream fis = null;
-		FileInputStream inputStream = null;
-		FileOutputStream fos = null;
-		try
-		{
-			if(inFile.exists())
-			{
-//				String tmpfilepath = DiskUtil.getRootPath()+"/archive/temp/transactions/"+MD5Util.hash(inFile.getAbsolutePath())+(new Date().getTime()) + "eml.temp";// 临时文件
-				String tmpfilepath = DiskUtil.getRootPath()+"/archive/temp/transactions/"+MD5Util.hash(inFile.getAbsolutePath()) + "eml.temp";// 临时文件
-				File tmpFile = new File(tmpfilepath);
-				if(!tmpFile.getParentFile().exists())
-				{
-					tmpFile.getParentFile().mkdirs();
-				}
-				if(inFile.getName().endsWith(".LFS"))//加密存储的文件
-				{
-					fis = new FileInputStream(inFile);
-					byte[] bTag = new byte[10];
-					byte[] bInfoLen = new byte[20];
-					
-					fis.read(bTag);
-					fis.read(bInfoLen);
-					String fTag = new String(bTag).trim();
-					if(aesFileTag.equalsIgnoreCase(fTag))
-					{
-						String sInfoLen = new String(bInfoLen).trim();
-						int infoLen = Integer.parseInt(sInfoLen.trim());
-						
-						byte[] bInfo = new byte[infoLen];
-						fis.read(bInfo);
-						
-						byte[] decInfo = AESFileUtil.decryptByte(bInfo,0,bInfo.length,headerKey);
-						String sInfo = new String(decInfo,"UTF-8");
-						long fileSize = 0;
-						long eSize = 0;
-						String nLeve = "S";
-						if (null != sInfo) {
-							Pattern pattern;
-							Matcher matcher;
-							pattern = Pattern.compile("size=\"(.*?)\"");
-							matcher = pattern.matcher(sInfo);
-							if (matcher.find()) {
-								fileSize = Long.parseLong(matcher.group(1).trim());
-							}
-							pattern = Pattern.compile("eSize=\"(.*?)\"");
-							matcher = pattern.matcher(sInfo);
-							if (matcher.find()) {
-								eSize = Long.parseLong(matcher.group(1).trim());
-							}
-							pattern = Pattern.compile("nLeve=\"(.*?)\"");
-							matcher = pattern.matcher(sInfo);
-							if (matcher.find()) {
-								nLeve = matcher.group(1).trim();
-							}
-						}
-						logger.debug("fileSize:"+fileSize+" ,eSize:"+eSize+" ,nLeve:"+nLeve+" ,infoLen:"+infoLen);
-						
-						logger.debug(fTag+" , f:"+fTag.equalsIgnoreCase(aesFileTag));
-						fos = new FileOutputStream(tmpfilepath);
-						byte[] dByte = new byte[dSize];
-						int len;
-						int idx = 0;//块数
-						while ((len = fis.read(dByte)) != -1) {
-							if("S".equalsIgnoreCase(nLeve))
-							{
-								if(idx == 0)
-								{
-									fos.write(decryptByte(dByte,0,len));
-								}
-								else
-								{
-									fos.write(dByte,0,len);
-								}
-							}
-							else
-							{
-								fos.write(decryptByte(dByte,0,len));
-							}
-							idx ++;//递增
-						}
-						fos.close();
-						fis.close();
-					}
-					else
-					{
-						fis = new FileInputStream(inFile);//重新获得从0开始
-						fos = new FileOutputStream(tmpfilepath);
-						byte[] b = new byte[dSize];
-						int len;
-						while ((len = fis.read(b)) != -1) {
-							fos.write(decryptByte(b,0,len));
-						}
-						fos.close();
-						fis.close();
-					}
-					inputStream = new FileInputStream(tmpfilepath);
-				}
-				else
-				{
-					inputStream = new FileInputStream(inFile);//未加密
-				}
-			}
-			else
-			{
-				logger.error("decryptFile ERROR; "+inFile.getAbsolutePath()+" not exists");
-			}
-		}
-		catch(Exception e)
-		{
-			logger.error("解密文件流出错",e);
-			throw e;
-		}
-		finally
-		{
-			if(null != fis)
-			{
-				fis.close();
-			}
-			if(null != fos)
-			{
-				fos.close();
-			}
-		}
-		return inputStream;
-	}
-	*/
-	/**
-	 * 把文件inFile解密后存储为outFile
-	 * 
-	 * @param srcFile
-	 * @param destFile
-	 * @param privateKey
-	 * @throws Exception
 	 */
 	public static byte[] decryptFileHeaderByte(File inFile) throws Exception {
 		if(null == privateKey)
@@ -913,57 +720,16 @@ public class AESUtil {
 		{
 			if(inFile.exists())
 			{
-				if(inFile.getName().endsWith(".LFS"))
-				{
-					fis = new FileInputStream(inFile);
-					byte[] bTag = new byte[10];
-					fis.read(bTag);
-					String fTag = new String(bTag).trim();
-					if(aesFileTag.equalsIgnoreCase(fTag))
-					{
-						logger.debug(fTag+" , f:"+fTag.equalsIgnoreCase(aesFileTag));
-						//采用局部加密方式(大文件)
-						byte[] bInfoLen = new byte[20];
-						fis.read(bInfoLen);
-						String d_sInfoLen = new String(bInfoLen).trim();
-						int d_infoLen = Integer.parseInt(d_sInfoLen.trim());
-						
-						byte[] d_bInfo = new byte[d_infoLen];
-						fis.read(d_bInfo);
-						
-						byte[] b = new byte[dSize];
-						int len;
-						//最多取一M (读头信息以外的)
-						len =fis.read(b);
-						
-						decryptByte = decryptByte(b,0,len);
-						fis.close();
-						
-					}
-					else
-					{
-						fis = new FileInputStream(inFile);
-						byte[] b = new byte[dSize];
-						int len;
-//					while ((len = fis.read(b)) != -1) {
-//						fos.write(decryptByte(b,0,len));
-//					}
-						//最多取一M
-						len =fis.read(b);
-						decryptByte = decryptByte(b,0,len);
-						fis.close();
-					}
-				}
-				else
-				{
-					fis = new FileInputStream(inFile);
-					byte[] b = new byte[eSize];//未加密，不需要dSize
-					int len;
-					//最多取一M
-					len =fis.read(b);
-					decryptByte = b;//未加密
-					fis.close();
-				}				
+				fis = new FileInputStream(inFile);
+				byte[] b = new byte[dSize];
+				int len;
+//				while ((len = fis.read(b)) != -1) {
+//					fos.write(decryptByte(b,0,len));
+//				}
+				//最多取一M
+				len =fis.read(b);
+				decryptByte = decryptByte(b,0,len);
+				fis.close();
 			}
 			else
 			{
@@ -1207,11 +973,6 @@ public class AESUtil {
 		AESUtil.decryptBigFile( new File("D:/temp/Test.rar.e1"),new File("D:/Test_des.rar"));
 		System.out.println(System.currentTimeMillis() - a+" ms");
 		a = System.currentTimeMillis();
-		
-//		AESUtil.decryptFileToInputStream(new File("D:/temp/Test.rar.e1"));
-//		System.out.println(System.currentTimeMillis() - a+" ms");
-//		a = System.currentTimeMillis();
-		
 		
 //		AESUtil.encryptBigFile(new File("D:/Test.txt"), new File("D:/temp/Test.rar.e1"));
 //		System.out.println(System.currentTimeMillis() - a+" ms");

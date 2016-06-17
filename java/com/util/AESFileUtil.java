@@ -24,12 +24,27 @@ public class AESFileUtil {
 	
 	private static Logger logger = Logger.getRootLogger();
 	
-	public static final int eSize = 1048576;//1024*1024，1M	
+	public static final int eSize = 1048576;//1024*1024，1M
 	public static final int dSize = 1048592;//1024*1024+16
-	private static final long bigFileSize = 10485760;//1024*1024*10,//大于10M的文件加密前后1M内容。可提高速度
-	private static final String aesFileTag = "LYESecret";//大文件标识
 	public static Key privateKey;
 	public static Key headerKey = new SecretKeySpec("fe1b9a223ba095ff".getBytes(), "AES");
+	
+	/**
+	 * 初始化
+	 */
+	static
+	{
+//		if(null == headerKey)
+//		{
+//			String strPass1 =  MD5Util.hash("LYECrypt");
+//			String strPass16 = strPass1.substring(0, 8);
+//			String strKey = MD5Util.hash(strPass1);
+//			String strKey16 = strKey.substring(24,32);
+//			strKey16 += strPass16;
+//			System.out.println(strKey16);
+//			headerKey = new SecretKeySpec(strKey16.getBytes(), "AES");
+//		}
+	}
 	
 	/**
 	 * 加密字节
@@ -81,6 +96,128 @@ public class AESFileUtil {
 			len = length;
 		}		
 		return cipher.doFinal(b, pos, len);
+	}
+	
+	/**
+	 * 把文件inFile加密后存储为outFile
+	 * 
+	 * @param srcFile
+	 * @param destFile
+	 */
+	public static boolean encryptFile(File inFile, File outFile,String key) throws Exception {
+		boolean flag = false;
+		try
+		{
+			privateKey = new SecretKeySpec(key.getBytes(), "AES");
+		}
+		catch(Exception e)
+		{
+			logger.error("软件密钥错误！不能加密文件");
+			return false;
+		}
+		FileInputStream fis = null;
+		FileOutputStream fos = null;
+		try
+		{
+			if(inFile.exists())
+			{
+				if (!outFile.exists()) outFile.getParentFile().mkdirs();//建立目录
+				
+				fis = new FileInputStream(inFile);
+				fos = new FileOutputStream(outFile);
+				byte[] b = new byte[eSize];
+				int len;
+				while ((len = fis.read(b)) != -1) {
+					fos.write(encryptByte(b,0,len,privateKey));
+				}
+				fos.close();
+				fis.close();
+				
+				flag = true;//成功
+			}
+			else
+			{
+				logger.error("encryptFile ERROR; "+inFile.getAbsolutePath()+" not exists");
+			}
+		}
+		catch(Exception e)
+		{
+			e.printStackTrace();
+		}
+		finally
+		{
+			if(null != fis)
+			{
+				fis.close();
+			}
+			if(null != fos)
+			{
+				fos.close();
+			}
+		}
+		return flag;
+	}
+
+	/**
+	 * 把文件inFile解密后存储为outFile
+	 * 
+	 * @param srcFile
+	 * @param destFile
+	 * @param privateKey
+	 * @throws Exception
+	 */
+	public static boolean decryptFile(File inFile, File outFile,String key) throws Exception {
+		boolean flag = false;
+		try
+		{
+			privateKey = new SecretKeySpec(key.getBytes(), "AES");
+		}
+		catch(Exception e)
+		{
+			logger.error("软件密钥错误！不能解密文件");
+			return false;
+		}
+		FileInputStream fis = null;
+		FileOutputStream fos = null;
+		try
+		{
+			if(inFile.exists())
+			{
+				if (!outFile.exists()) outFile.getParentFile().mkdirs();//建立目录
+				
+				fis = new FileInputStream(inFile);
+				fos = new FileOutputStream(outFile);
+				byte[] b = new byte[dSize];
+				int len;
+				while ((len = fis.read(b)) != -1) {
+					fos.write(decryptByte(b,0,len,privateKey));
+				}
+				fos.close();
+				fis.close();
+				
+				flag = true;
+			}
+			else
+			{
+				logger.error("decryptFile ERROR; "+inFile.getAbsolutePath()+" not exists");
+			}
+		}
+		catch(Exception e)
+		{
+			e.printStackTrace();
+		}
+		finally
+		{
+			if(null != fis)
+			{
+				fis.close();
+			}
+			if(null != fos)
+			{
+				fos.close();
+			}
+		}
+		return flag;
 	}
 	
 	/**
@@ -142,121 +279,25 @@ public class AESFileUtil {
 				sInfoLen = padRight(sInfoLen,20-sInfoLen.length());
 				fos.write(sTag.getBytes());
 				fos.write(sInfoLen.getBytes());
-				fos.write(bInfo);	
-				if(inFile.getName().endsWith(".LFS"))
-				{
-					isDecrypt = true;
-				}
-				else
-				{
-					isDecrypt = false;
-				}
+				fos.write(bInfo);		
 				if(isDecrypt)
 				{
-					byte[] bTag = new byte[10];
-					fis.read(bTag);
-					String fTag = new String(bTag).trim();
-					if(aesFileTag.equalsIgnoreCase(fTag))
-					{
-						logger.debug(fTag+" , f:"+fTag.equalsIgnoreCase(aesFileTag));
-						//采用局部加密方式(大文件)
-						byte[] bInfoLen = new byte[20];
-						fis.read(bInfoLen);
-						String d_sInfoLen = new String(bInfoLen).trim();
-						int d_infoLen = Integer.parseInt(d_sInfoLen.trim());
-						
-						byte[] d_bInfo = new byte[d_infoLen];
-						fis.read(d_bInfo);
-						
-						byte[] decInfo = AESFileUtil.decryptByte(d_bInfo,0,d_bInfo.length,headerKey);
-						String d_sInfo = new String(decInfo,"UTF-8");
-						long d_fileSize = 0;
-						long d_eSize = 0;
-						String nLeve = "S";
-						if (null != d_sInfo) {
-							Pattern pattern;
-							Matcher matcher;
-							pattern = Pattern.compile("size=\"(.*?)\"");
-							matcher = pattern.matcher(d_sInfo);
-							if (matcher.find()) {
-								d_fileSize = Long.parseLong(matcher.group(1).trim());
-							}
-							pattern = Pattern.compile("eSize=\"(.*?)\"");
-							matcher = pattern.matcher(d_sInfo);
-							if (matcher.find()) {
-								d_eSize = Long.parseLong(matcher.group(1).trim());
-							}
-							pattern = Pattern.compile("nLeve=\"(.*?)\"");
-							matcher = pattern.matcher(d_sInfo);
-							if (matcher.find()) {
-								nLeve = matcher.group(1).trim();
-							}
-						}
-						logger.debug("fileSize:"+d_fileSize+" ,eSize:"+d_eSize+" ,nLeve:"+nLeve+" ,infoLen:"+d_infoLen);
-						if("N".equalsIgnoreCase(nLeve))
+					byte[] b = new byte[eSize];
+					byte[] db = new byte[AESUtil.dSize];
+					int dlen;
+					while ((dlen = fis.read(db)) != -1) {						
+						byte eb[] = AESUtil.decryptByte(db, 0, dlen);
+						if(eb.length%16==0)
 						{
-							byte[] b = new byte[eSize];
-							int len;
-							while ((len = fis.read(b)) != -1) {
-								fos.write(encryptByte(b,0,len,privateKey));
-							}
-						}
-						else if("S".equalsIgnoreCase(nLeve))
-						{
-							//局部加密
-							byte[] b = new byte[eSize];
-							byte[] db = new byte[AESUtil.dSize];
-							int dlen = fis.read(db);
-							byte eb[] = AESUtil.decryptByte(db, 0, dlen);
-							fos.write(encryptByte(eb,0,eb.length,privateKey));//第1M
-							while ((dlen = fis.read(b)) != -1) {
-								fos.write(encryptByte(b,0,dlen,privateKey));
-							}
+							fos.write(encryptByte(eb,0,eb.length,privateKey));
 						}
 						else
 						{
-							//采用普通解密方式(从0开始读)
-							byte[] b = new byte[eSize];
-							byte[] db = new byte[AESUtil.dSize];
-							int dlen;
-							while ((dlen = fis.read(db)) != -1) {
-								byte eb[] = AESUtil.decryptByte(db, 0, dlen);
-								if(eb.length%16==0)
-								{
-									fos.write(encryptByte(eb,0,eb.length,privateKey));
-								}
-								else
-								{
-									for(int i=0;i<eb.length;i++)
-									{
-										b[i] = eb[i];
-									}
-									fos.write(encryptByte(b,0,eb.length,privateKey));
-								}
-							}
-						}
-					}
-					else
-					{
-						//采用普通解密方式(从0开始读)
-						fis = new FileInputStream(inFile);
-						byte[] b = new byte[eSize];
-						byte[] db = new byte[AESUtil.dSize];
-						int dlen;
-						while ((dlen = fis.read(db)) != -1) {						
-							byte eb[] = AESUtil.decryptByte(db, 0, dlen);
-							if(eb.length%16==0)
+							for(int i=0;i<eb.length;i++)
 							{
-								fos.write(encryptByte(eb,0,eb.length,privateKey));
+								b[i] = eb[i];
 							}
-							else
-							{
-								for(int i=0;i<eb.length;i++)
-								{
-									b[i] = eb[i];
-								}
-								fos.write(encryptByte(b,0,eb.length,privateKey));
-							}
+							fos.write(encryptByte(b,0,eb.length,privateKey));
 						}
 					}
 				}
@@ -361,7 +402,6 @@ public class AESFileUtil {
 				while ((len = fis.read(b)) != -1) {
 					fos.write(decryptByte(b,0,len,privateKey));
 				}
-				
 				fos.close();
 				fis.close();
 				
@@ -453,7 +493,6 @@ public class AESFileUtil {
 				}
 				else
 				{
-					//采用普通解密方式(从0开始读)
 					fis = new FileInputStream(inFile);
 					byte[] bTag = new byte[10];
 					byte[] bInfoLen = new byte[20];
@@ -500,41 +539,32 @@ public class AESFileUtil {
 	 
 	 
 	public static void main(String args[]) throws Exception {
-		String pwd = "123";
-		String keyValue = MD5Util.hash(MD5Util.hash(pwd)).substring(16);
-		
-		long a = System.currentTimeMillis();
-		String f = "/D:/temp/1.jpg";
+//		String pwd = "123";
+//		String keyValue = MD5Util.hash(MD5Util.hash(pwd)).substring(16);
+//		
+////		long a = System.currentTimeMillis();
+//		String f = "/c:/lye/text.txt";
+////		//加密
+////		AESFileUtil.encryptFile(new File(f), new File(f+".lye"));
+////		//解密
+////		AESFileUtil.decryptFile(new File(f+".lye"), new File(f+".lye."+DiskUtil.getExt(f)));
 //		
 ////		System.out.println(System.currentTimeMillis() - a+" ms");
 //		
 //		//加密
-		String fileName = "134.png";
-		long keyId = 56;
-		int ver = 1;
-		String verName = "LINK_BOX_3.5.1";
-		int level = 1;
-		AESFileUtil.encryptLYEFile(new File(f), new File(f+".lye"),false,fileName,new File(f).length(),keyId,ver,verName,level,pwd,keyValue);
-		
-		AESFileUtil.decryptLYEFile(new File(f+".lye"), new File(f+".lye.jpg"),keyValue);
-//		f = "D:/temp/Test.rar.e1";
-//		AESFileUtil.encryptLYEFile(new File(f), new File(f+".lye"),true,fileName,new File(f).length(),keyId,ver,verName,level,pwd,keyValue);
+//		f = "/c:/lye/134.png";
+//		String fileName = "134.png";
+//		long keyId = 56;
+//		int ver = 1;
+//		String verName = "LINK_BOX_3.5.1";
+//		int level = 1;
+//		AESFileUtil.encryptLYEFile(new File(f), new File(f+".lye"),false,fileName,new File(f).length(),keyId,ver,verName,level,pwd,keyValue);
 //		//解密
 //		f = "/c:/lye/ttt.lye";
 //		System.out.println("keyValue = "+keyValue);
 //		AESFileUtil.decryptLYEFile(new File(f), new File(f+".txt"),keyValue);
-//		String f = "/e:/usr/linkapp/data/linkapp//archive/db/2012/11/06/1448070302_7df093fa7f0707231266deb9a212fd6a.LFS";
-		AESUtil.encryptFile(new File(f), new File(f+".LFS"));//加密保存文件
-		AESUtil.decryptFile(new File(f+".LFS"), new File(f+".LFS.jpg"));//加密保存文件
-		
-		AESFileUtil.encryptLYEFile(new File(f+".LFS"), new File(f+".LFS.lye"),true,fileName,new File(f).length(),keyId,ver,verName,level,pwd,keyValue);
-		
-//		AESUtil.encryptFile(new File(f+".lye"), new File(f+".lye.LFS"));//加密保存文件
-		
-		AESFileUtil.decryptLYEFile(new File(f+".LFS.lye"),new File(f+".LFS.lye.jpg"),keyValue);
-		
-		f = f+".lye.LFS";
-		keyId = AESFileUtil.getLYEFileKeyId(new File(f),true);
+		String f = "/e:/usr/linkapp/data/linkapp//archive/db/2012/11/06/1448070302_7df093fa7f0707231266deb9a212fd6a.LFS";
+		long keyId = AESFileUtil.getLYEFileKeyId(new File(f),true);
 		System.out.println("keyId="+keyId);
 	}
 }

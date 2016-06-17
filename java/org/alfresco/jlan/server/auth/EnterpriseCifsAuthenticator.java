@@ -2297,10 +2297,7 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 	public UserAccount getUserDetails1(String name){
 		UserAccount account = null;
 		try {
-			String sql = "SELECT a.username, a.security_hash as password ,  '1' AS  ENABLE, b.cifs_enabled  FROM `jweb_users` a " +
-					" LEFT JOIN jweb_user_info b on a.id = b.userid " +
-					" WHERE lower(username)  = lower('"+name+"')" +
-					" AND a.status = 1";
+			String sql = "SELECT username, security_hash as password ,  '1' AS  ENABLE  FROM `jweb_users` WHERE lower(username)  = lower('"+name+"');";
 			JdbcTemplate springJdbcTemp = (JdbcTemplate) SpringUtil.getBean("springJdbcTemp");
 			List<Map<String, Object>> userList = springJdbcTemp.queryForList(sql);
 			if(null != userList && userList.size()>0)
@@ -2308,16 +2305,11 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 				Map<String, Object> map = userList.get(0);
 				String username = null !=map.get("username")?map.get("username").toString():"";
 				String pwd = null !=map.get("password")?map.get("password").toString():"";
-				String cifsEnabled = null !=map.get("cifs_enabled")?map.get("cifs_enabled").toString():"";
-				if (cifsEnabled.equals("0")) {
-					log4j.error("getUserDetails1 by userName returned empty cauz userid is cifs_enabled is 0");
-					return null;
-				} else {
-					if (null != pwd) {
-						pwd = AESUtil.decryptHexStrToStr(pwd, SECURITYKEY).trim();
-					}
-					account = new UserAccount(username,pwd);
+				if (null != pwd) {
+					pwd = AESUtil.decryptHexStrToStr(pwd, SECURITYKEY).trim();
 				}
+				account = new UserAccount(username,pwd);
+				
 			}
 			else
 			{
@@ -2337,10 +2329,7 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 	public UserAccount getUserDetails2(String name){
 		UserAccount account = null;
 		try {
-			String sql = "SELECT a.username, a.security_hash as password ,  '1' AS  ENABLE, b.cifs_enabled  FROM `jweb_users` a " +
-					" LEFT JOIN jweb_user_info b on a.id = b.userid " +
-					" WHERE lower(username)  = lower('"+name+"')" +
-					" AND a.status = 1";
+			String sql = "SELECT username, security_hash as password ,  '1' AS  ENABLE  FROM `jweb_users` WHERE lower(username)  = lower('"+name+"');";
 			JdbcTemplate springJdbcTemp = (JdbcTemplate) SpringUtil.getBean("springJdbcTemp");
 			List<Map<String, Object>> userList = springJdbcTemp.queryForList(sql);
 			if(null != userList && userList.size()>0)
@@ -2348,16 +2337,10 @@ public class EnterpriseCifsAuthenticator extends CifsAuthenticator implements Ca
 				Map<String, Object> map = userList.get(0);
 				String username = null !=map.get("username")?map.get("username").toString():"";
 				String pwd = null !=map.get("password")?map.get("password").toString():"";
-				String cifsEnabled = null !=map.get("cifs_enabled")?map.get("cifs_enabled").toString():"";
-				if (cifsEnabled.equals("0")) {
-					log4j.error("getUserDetails2 by userName returned empty cauz userid is cifs_enabled is 0");
-					return null;
-				} else {
-					account = new UserAccount(username,pwd);
-				}
 	//			if (null != pwd) {
 	//				pwd = AESUtil.decryptHexStrToStr(pwd, SECURITYKEY).trim();
 	//			}
+				account = new UserAccount(username,pwd);
 			}
 			else
 			{

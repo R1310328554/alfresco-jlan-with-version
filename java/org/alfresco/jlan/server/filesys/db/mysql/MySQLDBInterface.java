@@ -4685,7 +4685,7 @@ public class MySQLDBInterface extends JdbcDBInterface implements
 				if(StringUtils.isNotEmpty(filePath))
 				{
 					rollFile = new File(filePath);
-					if(null ==rollFile || (null != rollFile && rollFile.exists() == false) || !(storePath.endsWith(".LFS") || storePath.endsWith(".LFN")))
+					if(null ==rollFile || (null != rollFile && rollFile.exists() == false) || !storePath.endsWith(".LFS"))
 					{
 						if(StringUtils.isNotEmpty(storePath))
 							rollFile = new File(storePath);//临时文件地址
@@ -4713,7 +4713,7 @@ public class MySQLDBInterface extends JdbcDBInterface implements
 						return DBFileLoader.StsError;// 失败
 					}
 				}
-				else if(storePath.endsWith(".LFS") || storePath.endsWith(".LFN"))//如果是.LFS或.LFN表示是LFS存储文件
+				else if(storePath.endsWith(".LFS"))
 				{
 					if(uFile.exists() && uFile.length()>0 && uFile.lastModified()>lastModified)
 					{

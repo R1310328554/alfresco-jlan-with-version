@@ -224,8 +224,7 @@ public class FilesMappingForDB implements ShareMapper, ConfigurationListener {
 		}
 		else
 		{
-			// Default to a 8000Gb sized disk with 90% free space
-			srv = new SrvDiskInfo(256000000, 64, 512, 230400000);
+			 srv= new SrvDiskInfo(2560000, 64, 512, 2304000);
 		}
 		
 		context.setDiskInformation(srv);
@@ -345,8 +344,8 @@ public class FilesMappingForDB implements ShareMapper, ConfigurationListener {
 	    }
 		// Create volume information using the share name
 		VolumeInfo volInfo = new VolumeInfo(config.getName(), (int) System.currentTimeMillis(), new Date(System.currentTimeMillis()));
-		// Default to a 8000Gb sized disk with 90% free space
-		SrvDiskInfo diskInfo = new SrvDiskInfo(256000000, 64, 512, 230400000);
+		// Default to a 80Gb sized disk with 90% free space
+		SrvDiskInfo diskInfo = new SrvDiskInfo(2560000, 64, 512, 2304000);
 		
 		FileStateCache stateCache = null;
 		if ( drvObj instanceof DiskInterface) {

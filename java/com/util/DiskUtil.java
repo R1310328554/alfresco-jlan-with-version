@@ -56,14 +56,7 @@ public class DiskUtil {
 			}
 			java.util.Calendar c = java.util.Calendar.getInstance();
 			java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("yyyy/MM/dd/HHmmssSSSS");		
-			if(AESUtil.encrypt)
-			{
-				path = "/archive/db/"+f.format(c.getTime())+"_"+md5+".LFS";//加密存储
-			}
-			else
-			{
-				path = "/archive/db/"+f.format(c.getTime())+"_"+md5+".LFN";//非加密存储
-			}
+			path = "/archive/db/"+f.format(c.getTime())+"_"+md5+".LFS";
 			path = DiskUtil.replacePath(path);
 		}catch (Exception e) {
 			e.printStackTrace();

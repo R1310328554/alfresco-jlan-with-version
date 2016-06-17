@@ -2252,8 +2252,8 @@ public class CifsOnlyXMLServerConfiguration extends ServerConfiguration {
 		}
 		else {
 
-			// Default to a 8000Gb sized disk with 90% free space
-			diskInfo = new SrvDiskInfo(256000000, 64, 512, 230400000);
+			// Default to a 80Gb sized disk with 90% free space
+			diskInfo = new SrvDiskInfo(2560000, 64, 512, 2304000);
 		}
 
 		// Check if a state cache is configured

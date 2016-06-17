@@ -4722,7 +4722,7 @@ public class MySQLDBWasInterface extends JdbcDBInterface implements
 					return DBFileLoader.StsError;// 失败
 				}
 			}
-			else if(storePath.endsWith(".LFS") || storePath.endsWith(".LFN"))//如果是.LFS或.LFN表示是LFS存储文件
+			else if(storePath.endsWith(".LFS"))
 			{
 				AESUtil.decryptFile(rollFile, uFile);
 				log4j.debug("加密文件转换完成; uFile:" + uFile.exists() + " , length:"

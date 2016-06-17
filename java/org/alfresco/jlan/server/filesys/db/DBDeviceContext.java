@@ -60,8 +60,7 @@ public class DBDeviceContext extends DiskDeviceContext implements FileStateCache
 
 	// NTFS streams enable flag
 
-//	private boolean m_ntfsStreams = true;
-	private boolean m_ntfsStreams = false;//默认不开启NTFS Streams
+	private boolean m_ntfsStreams = true;
 
 	// Database interface class
 	//

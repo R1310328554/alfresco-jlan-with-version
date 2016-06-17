@@ -38,7 +38,6 @@ import javax.servlet.ServletContext;
 import net.sf.ehcache.Cache;
 import net.sf.ehcache.CacheManager;
 import net.sf.ehcache.Element;
-
 import org.alfresco.jlan.server.config.InvalidConfigurationException;
 import org.alfresco.jlan.server.filesys.AccessDeniedException;
 import org.alfresco.jlan.server.filesys.DiskFullException;
@@ -889,7 +888,19 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 * @throws DBException
 	 */
 	public int fileExists(int dirId, String fname,String shareName) throws DBException {
-		String FileSysTableName = getRevisionTableName(shareName);
+		String FileSysTableName = FileSysTable_COMMFILE;
+		String FileRevisionTableName = FileRevisionTable_COMMFILE;
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			FileSysTableName = FileSysTable_MYFILE;
+			FileRevisionTableName = FileRevisionTable_MYFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			FileSysTableName = FileSysTable_COMMFILE;
+			FileRevisionTableName = FileRevisionTable_COMMFILE;
+		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
+		{
+			FileSysTableName = FileSysTable_SHAREFILE;
+			FileRevisionTableName = FileRevisionTable_SHAREFILE;
+		}
 		// Check if the file exists, and whether it is a file or folder
 		log4j.debug("DBI#fileExists ; fname:" + fname + ", dirId:" + dirId);
 		int sts = FileStatus.NotExist;
@@ -999,19 +1010,23 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	public int createFileRecord(String fname, int dirId, FileOpenParams params,
 			boolean retain, String userName, String shareName, String ipAddress)
 			throws DBException, FileExistsException,AccessDeniedException {
-		
+
 		java.util.Date nowDate = new java.util.Date();// 时间的定义放在前面。这样即使中间操作花了较多时间。也可以用这个时间与原文件的时间比较
 		long timeNow = System.currentTimeMillis();
 		log4j.debug("DBI#createFileRecord time:" + nowDate.getTime() + ", fname:" + fname + ", shareName:" + shareName + "; path:" + params.getPath());
-		
-		// 解决编辑时候产生临时文件诸如~$aa12.xlsx/~$azzazazx.pptx 的问题
-		if (fname.startsWith("~$") && (fname.endsWith(".xlsx") || fname.endsWith(".pptx"))) {
-			log4j.warn("DBI#createFileRecord of temp file are skipped :" + fname);
-			return -1;// 直接跳过，不生成临时文件
+		String FileSysTableName = FileSysTable_COMMFILE;
+		String FileRevisionTableName = FileRevisionTable_COMMFILE;
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			FileSysTableName = FileSysTable_MYFILE;
+			FileRevisionTableName = FileRevisionTable_MYFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			FileSysTableName = FileSysTable_COMMFILE;
+			FileRevisionTableName = FileRevisionTable_COMMFILE;
+		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
+		{
+			FileSysTableName = FileSysTable_SHAREFILE;
+			FileRevisionTableName = FileRevisionTable_SHAREFILE;
 		}
-		
-		String FileSysTableName = getFileSysTableName(shareName);
-		String FileRevisionTableName = getRevisionTableName(shareName);
 		// Create a new file record for a file/folder and return a unique file
 		// id
 		
@@ -1182,8 +1197,8 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 							if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
 								insertSql = "insert into "
 									+ FileRevisionTableName
-									+ " (fileId,baseFileId,name,md5,size,lastModified,userId,uploaderId,revision,revisionCount,rollPath,status) values ("
-									+ fileId + ","+ fileId + ",'" + chkFileName+ "','md51',0," + nowDate.getTime() + ","
+									+ " (fileId,name,md5,size,lastModified,userId,uploaderId,revision,revisionCount,rollPath,status) values ("
+									+ fileId + ",'" + chkFileName+ "','md51',0," + nowDate.getTime() + ","
 									+ userId +","+userId+ ",0," + revisionCount + ",'"+ rootPath + "',4)";
 							}
 							log4j.debug("[mySQL] insertSql SQL:" + insertSql);
@@ -1209,7 +1224,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 								insertSql = "insert into "
 									+ FileRevisionTableName
 									+ " (fileId,name,md5,size,lastModified,userId,uploaderId,revision,revisionCount,rollPath,status) values ("
-									+ fileId + ","+ fileId + ",'" + chkFileName+ "','md51',0," + nowDate.getTime() + ","+ userId +","+userId+ ",0," + revisionCount + ",'"+ rootPath + "',4)";
+									+ fileId + ",'" + chkFileName+ "','md51',0," + nowDate.getTime() + ","+ userId +","+userId+ ",0," + revisionCount + ",'"+ rootPath + "',4)";
 							}
 							log4j.debug("[mySQL] insertSql SQL:" + insertSql);
 							stmt.executeUpdate(insertSql);
@@ -1275,7 +1290,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			int pid2 = 0;// 二级目录id
 			String pathIds = "";
 			int revision = 1;
-			/*if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS))
+			if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equals(DBUtil.SHARENAME_COMMFILE_ALIAS))
 			{
 				//资料库获得版本号
 				stmt.executeUpdate(updateMaxRevision_hql);
@@ -1295,44 +1310,6 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				rs = stmt.executeQuery(vsql);
 				if (rs.next()) {
 					revision = rs.getInt("revision") + 1;
-				}
-				rs.close();
-			}*/
-			//以上注释，用以下方式，防止shareName为空，资料库版本获得失败
-			if (shareName.equals(DBUtil.SHARENAME_USERFILE) || shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-			{
-				String vsql = "SELECT max(revision) as revision FROM " + FileRevisionTableName;			
-				if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-					vsql = "SELECT max(revision) as revision FROM " + FileRevisionTableName + "  WHERE userId =" + userId;
-				}
-				log4j.debug("[mySQL] vsql SQL:" + vsql);
-				rs = stmt.executeQuery(vsql);
-				if (rs.next()) {
-					try{
-						if(null != rs)
-							revision = rs.getInt("revision") + 1;
-					}
-					catch(Exception e)
-					{
-						log4j.error("DBI#createFileRecord 获得revision值错误 :"+e.getMessage()+"\nSQL:"+vsql);
-					}
-				}
-				rs.close();
-			}
-			else
-			{
-				//资料库获得版本号
-				stmt.executeUpdate(updateMaxRevision_hql);
-				rs = stmt.executeQuery(findMaxRevision_hql);
-				if (rs.next()) {
-					try{
-						if(null != rs)
-							revision = rs.getInt("max_value");
-					}
-					catch(Exception e)
-					{
-						log4j.error("DBI#createFileRecord 获得revision值错误 :"+e.getMessage());
-					}
 				}
 				rs.close();
 			}
@@ -1533,8 +1510,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				// 插入版本记录(staus=4，正在编辑)
 				String insertSql = "insert into "
 						+ FileRevisionTableName
-						+ " (fileId,baseFileId,name,md5,size,lastModified,userId,revision,revisionCount,rollPath,status) values ("+
-						fileId + "," + fileId + ",'" + chkFileName + "','md51',0,"+ nowDate.getTime() + "," + userId + "," + revision+ "," + revisionCount + ",'" + rootPath + "',4)";
+						+ " (fileId,name,md5,size,lastModified,userId,revision,revisionCount,rollPath,status) values ("+ fileId + ",'" + chkFileName + "','md51',0,"+ nowDate.getTime() + "," + userId + "," + revision+ "," + revisionCount + ",'" + rootPath + "',4)";
 				log4j.debug("[mySQL] insertSql SQL:" + insertSql);
 				stmt.executeUpdate(insertSql);
 				log4j.debug("[mySQL] Created file name=" + fname + ", dirId="+ dirId + ", fileId=" + fileId);
@@ -1723,7 +1699,19 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		log4j.debug("DBI#deleteFileRecord ; dirId:" + dirId + " ,fid:" + fid + " , userName:" + userName + " ,shareName:" + shareName + " ,markOnly:" + markOnly);
 		// Delete a file record FROM the database, or mark the file record as
 		// deleted
-		String FileSysTableName = getFileSysTableName(shareName);
+		String FileSysTableName = FileSysTable_COMMFILE;
+		String FileRevisionTableName = FileRevisionTable_COMMFILE;
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			FileSysTableName = FileSysTable_MYFILE;
+			FileRevisionTableName = FileRevisionTable_MYFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			FileSysTableName = FileSysTable_COMMFILE;
+			FileRevisionTableName = FileRevisionTable_COMMFILE;
+		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
+		{
+			FileSysTableName = FileSysTable_SHAREFILE;
+			FileRevisionTableName = FileRevisionTable_SHAREFILE;
+		}
 		Connection conn = null;
 		Statement stmt = null;
 		int userId = 0;
@@ -1993,13 +1981,6 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	public void setFileInformation(int dirId, int fid, FileInfo finfo,String shareName)
 			throws DBException {
 		
-		
-
-		if (finfo.getSize() == 0) {// finfo.isDirectory() 永远都是false
-			log4j.error("DBD#setFileInformation() filesize == 0 !");
-			return;
-		}
-		
 		if(null != finfo && (finfo.hasSetFlag(FileInfo.SetFileSize) || finfo.hasSetFlag(FileInfo.SetModifyDate)) )
 		{
 		// Set file information fields
@@ -2008,7 +1989,19 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		Statement stmt = null;
 		java.util.Date nowDate = new java.util.Date();
 		
-		String FileSysTableName = getFileSysTableName(shareName);
+		String FileSysTableName = FileSysTable_COMMFILE;
+		String FileRevisionTableName = FileRevisionTable_COMMFILE;
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			FileSysTableName = FileSysTable_MYFILE;
+			FileRevisionTableName = FileRevisionTable_MYFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			FileSysTableName = FileSysTable_COMMFILE;
+			FileRevisionTableName = FileRevisionTable_COMMFILE;
+		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
+		{
+			FileSysTableName = FileSysTable_SHAREFILE;
+			FileRevisionTableName = FileRevisionTable_SHAREFILE;
+		}
 		try {
 
 			// Get a connection to the database
@@ -2217,7 +2210,19 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	public int getFileId(int dirId, String fname, boolean dirOnly,
 			boolean caseLess, int userId, String shareName, String userName)
 			throws DBException {
-		String FileSysTableName = getFileSysTableName(shareName);
+		String FileSysTableName = FileSysTable_COMMFILE;
+		String FileRevisionTableName = FileRevisionTable_COMMFILE;
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			FileSysTableName = FileSysTable_MYFILE;
+			FileRevisionTableName = FileRevisionTable_MYFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			FileSysTableName = FileSysTable_COMMFILE;
+			FileRevisionTableName = FileRevisionTable_COMMFILE;
+		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
+		{
+			FileSysTableName = FileSysTable_SHAREFILE;
+			FileRevisionTableName = FileRevisionTable_SHAREFILE;
+		}
 		// Get the file id for a file/folder
 //		log4j.debug("DBI#getFileId ,dirId:" + dirId + ", fname:" + fname + ", userId:" + userId + " , shareName:" + shareName);
 		int fileId = -1;
@@ -2225,17 +2230,12 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		if (fname.equalsIgnoreCase(userName + DBUtil.SPECIAL_CHAR) && dirId <= 0) {
 			return 0;// 直接返回0
 		}
-		//最初结构是 "资料库/username@" 采用上面的规则，新版本目录结构改为“username@/资料库”,“username@/我的文件”
-		if (fname.equalsIgnoreCase(shareName) && dirId <= 0) {
-			return 0;// 直接返回0 (避免递归到根目录假目录时返回-1错误)
-		}
-		
 		if(fname.equalsIgnoreCase(DBUtil.CLOUDURL) && dirId<=0)
 		{
 			log4j.debug("[mySQL] -99: 加载文件云ID.url");
 			fileId = -99;
 			return -99;
-		}		
+		}
 
 		Connection conn = null;
 		Statement stmt = null;
@@ -2252,21 +2252,15 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			sql.append("SELECT id,lastModified,status FROM ");
 			sql.append(FileSysTableName);
 			sql.append(" WHERE status>=0 "); // status>=0 注意。后面要替换为 status=-1 查询
-//			if (fname.equalsIgnoreCase(userName + DBUtil.SPECIAL_CHAR)) {
-			if (fname.equalsIgnoreCase(userName + DBUtil.SPECIAL_CHAR) || (fname.equalsIgnoreCase(shareName) && dirId <= 0)) {
+			if (fname.equalsIgnoreCase(userName + DBUtil.SPECIAL_CHAR)) {
 				sql.append(" AND pid = 0");
 			} else {
 				sql.append(" AND pid = ").append(dirId);
 			}
-//			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-//
-//			} else {
-//				sql.append(" AND userId=").append(userId);
-//			}
-			//修改增加userid查询条件的判断
-			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE))
-			{
-				sql.append(" AND userId = ").append(userId);//我的文件才需要加userId,测试发现　shareName　可能会为空
+			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+
+			} else {
+				sql.append(" AND userId=").append(userId);
 			}
 			// Check if the search is for a directory only
 			if (dirOnly == true) {
@@ -2359,8 +2353,19 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 */
 	public DBFileInfo getFileInformation(int dirId, int fid, int infoLevel,
 			int userId, String shareName, String userName) throws DBException {
-		String FileSysTableName = getFileSysTableName(shareName);
-		String FileRevisionTableName = getRevisionTableName(shareName);
+		String FileSysTableName = FileSysTable_COMMFILE;
+		String FileRevisionTableName = FileRevisionTable_COMMFILE;
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			FileSysTableName = FileSysTable_MYFILE;
+			FileRevisionTableName = FileRevisionTable_MYFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			FileSysTableName = FileSysTable_COMMFILE;
+			FileRevisionTableName = FileRevisionTable_COMMFILE;
+		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
+		{
+			FileSysTableName = FileSysTable_SHAREFILE;
+			FileRevisionTableName = FileRevisionTable_SHAREFILE;
+		}
 		// Create a SQL SELECT for the required file information
 //		log4j.debug("DBI#getFileInformation ,dirId:" + dirId + ", fid:" + fid + ", userId:" + userId + " , shareName:" + shareName);
 		Connection conn = null;
@@ -2375,8 +2380,6 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		{
 			log4j.debug("[mySQL] -99: 加载文件云.url");
 			DBFileInfo finfo = new DBFileInfo();
-			java.util.Date nowDate = new java.util.Date();
-			finfo.setInfoLastModifyTime(nowDate.getTime());
 			finfo.setFileName(DBUtil.CLOUDURL);
 			finfo.setDirectoryId(dirId);
 			try{
@@ -2398,8 +2401,6 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		if (fid == 0) {
 			// Load the file record
 			DBFileInfo finfo = new DBFileInfo();
-			java.util.Date nowDate = new java.util.Date();
-			finfo.setInfoLastModifyTime(nowDate.getTime());
 			finfo.setFileName(userName);
 			finfo.setDirectoryId(dirId);
 			finfo.setSize(0);
@@ -2434,19 +2435,14 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 		// All file information
 		case DBInterface.FileAll:
-			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-				sql.append("id,pid,name,size,add_time,lastModified,isFile,userId");
-			} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-				sql.append("id,pid,name,size,add_time,lastModified,isFile,userId,permissionsFileId,islock,lockedByUser");
-			} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-			{
+			if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE)) {
 				sql.append("id,pid,name,size,add_time,lastModified,isFile,userId,permissions");
 			}
-			else
+			else if(shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE)||shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS))
 			{
-
-
-
+				sql.append("id,pid,name,size,add_time,lastModified,isFile,userId,permissionsFileId,islock,lockedByUser");
+			}
+			else {
 				sql.append("id,pid,name,size,add_time,lastModified,isFile,userId");
 			}
 			break;
@@ -2460,15 +2456,10 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		sql.append(FileSysTableName);
 		sql.append(" WHERE id = ");
 		sql.append(fid);
-//		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-//
-//		} else {
-//			sql.append(" AND userId = ").append(userId);
-//		}
-		//修改增加userid查询条件的判断
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE))
-		{
-			sql.append(" AND userId = ").append(userId);//我的文件才需要加userId,测试发现　shareName　可能会为空
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+
+		} else {
+			sql.append(" AND userId = ").append(userId);
 		}
 		// sql.append(" ORDER BY revision DESC");//返回单个文件，不排序（如果有重复记录说明数据有问题）
 
@@ -2490,8 +2481,6 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				finfo = new DBFileInfo();
 				finfo.setFileId(fid);
 				finfo.setFileAttributes(0);
-				java.util.Date nowDate = new java.util.Date();
-				finfo.setInfoLastModifyTime(nowDate.getTime());
 
 				// Load the file information
 
@@ -2993,10 +2982,6 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	 *            int
 	 * @exception DBException
 	 * @exception FileNotFoundException
-	 * 
-	 * 
-	 * docx 文件打开时不会调用这个方法， 保存时候会！
-	 * 
 	 */
 	public int renameFileRecord(int dirId, int fid, String newName, int newDir,String shareName)
 			throws DBException, FileNotFoundException {
@@ -3006,8 +2991,19 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		log4j.debug("DBI#renameFileRecord ; time:" + System.currentTimeMillis()
 				+ ", fileId:" + fid + ", newName:" + newName + ", newDir:"
 				+ newDir);
-		String FileSysTableName = getFileSysTableName(shareName);
-		String FileRevisionTableName = getRevisionTableName(shareName);
+		String FileSysTableName = FileSysTable_COMMFILE;
+		String FileRevisionTableName = FileRevisionTable_COMMFILE;
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			FileSysTableName = FileSysTable_MYFILE;
+			FileRevisionTableName = FileRevisionTable_MYFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			FileSysTableName = FileSysTable_COMMFILE;
+			FileRevisionTableName = FileRevisionTable_COMMFILE;
+		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
+		{
+			FileSysTableName = FileSysTable_SHAREFILE;
+			FileRevisionTableName = FileRevisionTable_SHAREFILE;
+		}
 		try {
 			synchronized (this)// 暂时改为同步。 避免产生重复文件
 			{
@@ -3016,85 +3012,91 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				// Get a connection to the database
 				conn = getConnection();
 				stmt = conn.createStatement();
-				ResultSet rRs = null;
 				// Update the file record
 
-				String selectMessage = "select name from " + FileRevisionTableName + " where status >= 0 and fileId = " + fid;
-				String oldName = "";
-				rRs = stmt.executeQuery(selectMessage);
+				String findOldSql = "SELECT id,revision,revisionCount,lastModified,status FROM " + FileSysTableName
+						+ " WHERE status>=0 AND pid=" + newDir + " AND LOWER(name) = LOWER('" + checkNameForSpecialChars(newName) + "') ORDER BY revision DESC,id ASC";
+				log4j.debug("[mySQL] findOldSql SQL: " + findOldSql);
+				ResultSet rRs = stmt.executeQuery(findOldSql);
+				long existFid = 0;
+				int existStatus = 0;
+				long revisionCount = 1;
 				if (rRs.next()) {
-					oldName = rRs.getString("name");
+					existFid = rRs.getLong("id");
+					revisionCount = rRs.getLong("revisionCount");
+					existStatus = rRs.getInt("status");
+				} else {
+					findOldSql = "SELECT id,revision,revisionCount,lastModified,status FROM " + FileSysTableName
+							+ " WHERE status >=-1 AND pid="+ newDir+ " AND LOWER(name) = LOWER('"+ checkNameForSpecialChars(newName)+ "') ORDER BY revision DESC,id ASC";
+					log4j.debug("[mySQL] del findOldSql SQL: " + findOldSql);
+					rRs = stmt.executeQuery(findOldSql);
+					if (rRs.next()) {
+						// 删除不超过10秒(10000ms)也表示存在
+						long lastTime = rRs.getLong("lastModified");
+						existStatus = rRs.getInt("status");
+						if (existStatus >= 0 || System.currentTimeMillis() - lastTime <= delFileKeepTime) {
+							existFid = rRs.getLong("id");
+							revisionCount = rRs.getLong("revisionCount");
+						} else {
+							log4j.debug("存在已经删除的记录，但已经超过10秒; fileId:" + rRs.getLong("id"));
+						}
+					}
 				}
 				rRs.close();
+				if (existFid > 0 && existFid != fid) {
+					// 改名重复的情况
+					revisionCount = revisionCount + 1;
+					long revision = 0;// 当前这个文件的版本
+					// long size = 0;
+					// String md5 = "md5";
+					findOldSql = "SELECT revision,size,md5,status FROM " + FileSysTableName + " WHERE id=" + fid;
+					log4j.debug("[mySQL] findOldSql SQL: " + findOldSql);
+					rRs = stmt.executeQuery(findOldSql);
+					if (rRs.next()) {
+						revision = rRs.getLong("revision");
+						// size = rRs.getLong("size");
+						// md5 = rRs.getString("md5");
+					}
+					rRs.close();
 
-				String revisionSql = "SELECT min(id) as fileId, max(revision) as revision,max(revisionCount) as revisionCount FROM "
-						+ FileSysTableName + " WHERE name = '" + newName + "' and pid = " + newDir;
-				int fileId = 1;
-				int oldRevision = 1;
-				int oldRevisionCount = 1;
+					// 已经存在同名的文件，将旧文件作为当前文件的新版本。不插入重新值
 
-				rRs = stmt.executeQuery(revisionSql);
-				if (rRs.next()) {
-					fileId = rRs.getInt("fileId");
-					oldRevision = rRs.getInt("revision");
-					oldRevisionCount = rRs.getInt("revisionCount");
-				}
-				if (oldRevisionCount == 0) {
-					oldRevisionCount = 2;
-				}
-				rRs.close();
-				
-
-				//log4j.error("[mySQL] Rename SQL: newName " + newName + " ---  oldName " + oldName + " and fid : "+ fid);
-				
-				
-				// 2003编辑2003 xls : new: 2003EXCEE00.xls~RFc439240.TMP  old:2003EXCEE00.xls
-				//2003 --2003 doc 第一次： new ~WRL0005.tmp--- doc 第二次：doc --- old ~WRD0004.tmp 
-				if (newName.toLowerCase().endsWith("tmp") && // 为什么要有 !newName.startsWith("~") && 
-						(oldName.endsWith("docx")||oldName.endsWith("xlsx")||oldName.endsWith("pptx")
-						|| oldName.endsWith("doc")||oldName.endsWith("xls")||oldName.endsWith("ppt"))) {
-					// 2003编辑2003 xls : old :1A214C00 new:2003EXCEE00.xls
-				} else if ((oldName.toLowerCase().endsWith("tmp") || oldName.matches("\\w+[\\w\\d]*")) && 
-						(newName.endsWith("docx")||newName.endsWith("xlsx")||newName.endsWith("pptx")
-						|| newName.endsWith("doc")||newName.endsWith("xls")||newName.endsWith("ppt"))) {
+//					String rRevisionSql = "UPDATE " + getFileRevisionTable()
+//							+ " SET fileId=" + existFid + ",revisionCount=" + revisionCount + ",name = '" + checkNameForSpecialChars(newName) + "', lastModified = " + System.currentTimeMillis()
+//							+ " WHERE fileId = " + fid;
+					String rOldRevisionSql =  "UPDATE " + FileRevisionTableName + " SET revisionCount=" + revisionCount + ",name = '" + checkNameForSpecialChars(newName) + "', lastModified = " + System.currentTimeMillis()+ " WHERE fileId = " + fid;
+					stmt.executeUpdate(rOldRevisionSql);//改旧的版本文件名
 					
-//						String renameFileSql = "UPDATE " + FileSysTableName + " SET status = 0, pid = " + newDir +
-//								", lastModified = " + System.currentTimeMillis() +
-//								" WHERE id = (SELECT min(revisionCount) as revisionCount FROM " + FileRevisionTableName
-//								+ " WHERE pid=" + dirId + " AND LOWER(name) = LOWER('" + oldName + "') )";
+					String rRevisionSql ="INSERT INTO "+FileRevisionTableName+" (fileid,name,tags,md5,size,lastModified,userId,revision,revisionCount,status,rollPath,storePath)" +
+							" SELECT "+existFid+" AS fileid, '"+checkNameForSpecialChars(newName)+"' AS name,tags,md5,size,lastModified,userId,revision,revisionCount, status,rollPath,storePath from "+FileRevisionTableName+" WHERE fileId = " + fid;
 					
-					// 改名不重复
-					String renameFileSql = "UPDATE " + FileSysTableName + " SET name = '"
-							+ checkNameForSpecialChars(newName) + "', pid = " + newDir
-							+ ", revisionCount = " + (oldRevisionCount+1)
-							+ ", lastModified = " + System.currentTimeMillis() + " WHERE id = " 
-							+ fid + " LIMIT 1";
-					String renameRevisionSql = "UPDATE " 	+FileRevisionTableName + " SET name = '" + checkNameForSpecialChars(newName)
-							+ "', revisionCount = " + (oldRevisionCount+1)
-							+ ", baseFileId = " + fileId
-							+ ", lastModified = " + System.currentTimeMillis() + " WHERE fileId = " + fid + "  LIMIT 1";
-
+					String renameFileSql = "UPDATE " + FileSysTableName + " SET status=-2,name = '" + checkNameForSpecialChars(newName)
+							+ "',revisionCount=" + revisionCount + ",pid=" + newDir + ",lastModified = " + System.currentTimeMillis() + " WHERE id = " + fid;// 改名并删除
+					
+					String updateFileSql = "UPDATE " + FileSysTableName
+					+ " SET status=4,revision=" + revision + ",revisionCount=" + revisionCount + ",pid=" + newDir + ",lastModified = " + System.currentTimeMillis()
+					+ " WHERE id = " + existFid;
+					log4j.debug("[mySQL] Rename Revion1  SQL: " + rRevisionSql);
+					if (stmt.executeUpdate(rRevisionSql) == 0) {// 文件版本改名
+						log4j.error("DBI#renameFileRecord  修改新版本对应的旧文件id失败! fid:" + fid + " ,existFid:" + existFid);
+					}
 					log4j.debug("[mySQL] Rename SQL: " + renameFileSql.toString());
 					// Rename the file/folder
 					if (stmt.executeUpdate(renameFileSql) == 0) {// 文件改名
 						// Original file not found
-						log4j.error("DBI#renameFileRecord FileNotFoundException , fid:" + fid);
-						return -1;
+						log4j.error("DBI#renameFileRecord 修改当前文件名称失败，FileNotFoundException  fid:" + fid);
+						throw new FileNotFoundException("" + fid);
+					}
+					log4j.debug("[mySQL] updateFileSql SQL: " + updateFileSql);
+					if (stmt.executeUpdate(updateFileSql) == 0) {// 文件版本改名
+						log4j.error("DBI#renameFileRecord  修改旧文件版本等属性失败! fid:" + fid + " ,existFid:" + existFid);
 					}
 
-					log4j.debug("[mySQL] Rename Revision  SQL: " + renameRevisionSql.toString());
-					if (stmt.executeUpdate(renameRevisionSql) == 0) {// 文件版本改名
-						log4j .error("DBI#renameFileRecord 修改当前文件版本名称失败! fileId=" + fid);
-					}
+//					String upSql = "UPDATE " + getFileSysTableName() + " SET status=0,revisionCount=" + revisionCount + ",lastModified=" + System.currentTimeMillis() + " WHERE status<0 AND id=" + existFid;
+//					log4j.debug("[mySQL] 更新文件状态 SQL:" + upSql);
+//					stmt.executeUpdate(upSql);
 					
-					//增加baseFileId 字段后， 下面的更新就不需要了
-//						renameRevisionSql = "UPDATE " 	+FileRevisionTableName + " SET fileId = "+fid+" WHERE id in (select t.* from (" 
-//								+"SELECT DISTINCT id FROM "+FileRevisionTableName+" WHERE fileId IN "
-//								+"(SELECT DISTINCT id from "+FileSysTableName+" WHERE `name` = '"+checkNameForSpecialChars(newName)
-//								+"' and pid = "+newDir+")) t )";
-//						if (stmt.executeUpdate(renameRevisionSql) == 0) {// 文件版本改名
-//							log4j .error("DBI#renameFileRecord 修改当前文件版本名称失败! fileId=" + fid);
-//						}
+					fid = (int) existFid;
 				} else {
 					// 改名不重复
 					String renameFileSql = "UPDATE " + FileSysTableName + " SET name = '"
@@ -3102,13 +3104,14 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 					String renameRevisionSql = "UPDATE " 	+FileRevisionTableName + " SET name = '" + checkNameForSpecialChars(newName)
 							+ "', lastModified = " + System.currentTimeMillis() + " WHERE fileId = " + fid;
 
+					log4j.debug("[mySQL] Rename SQL: " + renameFileSql.toString());
 					// Rename the file/folder
 					if (stmt.executeUpdate(renameFileSql) == 0) {// 文件改名
 						// Original file not found
 						log4j.error("DBI#renameFileRecord FileNotFoundException , fid:" + fid);
 						throw new FileNotFoundException("" + fid);
 					}
-//						String maxRevisionSql = "SELECT MAX(id) as id FROM " + getFileRevisionTable() + " WHERE fileId=" + fid;
+//					String maxRevisionSql = "SELECT MAX(id) as id FROM " + getFileRevisionTable() + " WHERE fileId=" + fid;
 					String  maxRevisionSql = "SELECT MAX(revision) as revision FROM " + FileRevisionTableName + " WHERE fileId=" + fid;
 					long maxRevision = 0;
 					log4j.debug("[mySQL] maxRevisionSql SQL: " + maxRevisionSql);
@@ -3125,7 +3128,6 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 						log4j .error("DBI#renameFileRecord 修改当前文件版本名称失败! fileId=" + fid);
 					}
 				}
-				
 			}
 		} catch (SQLException ex) {
 			// DEBUG
@@ -3156,8 +3158,19 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		// Rename a file/folder
 		Connection conn = null;
 		Statement stmt = null;
-		String FileSysTableName = getFileSysTableName(shareName);
-		String FileRevisionTableName = getRevisionTableName(shareName);
+		String FileSysTableName = FileSysTable_COMMFILE;
+		String FileRevisionTableName = FileRevisionTable_COMMFILE;
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			FileSysTableName = FileSysTable_MYFILE;
+			FileRevisionTableName = FileRevisionTable_MYFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			FileSysTableName = FileSysTable_COMMFILE;
+			FileRevisionTableName = FileRevisionTable_COMMFILE;
+		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
+		{
+			FileSysTableName = FileSysTable_SHAREFILE;
+			FileRevisionTableName = FileRevisionTable_SHAREFILE;
+		}
 		if(null !=fileSegInfo)
 		{
 			log4j.debug("DBI#modifyFileTemporaryFile ; time:" + System.currentTimeMillis()
@@ -3371,7 +3384,19 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 //			log4j.debug("DBI#startSearch截取后shareName=" + shareName + " \n\n\n");
 		}
 		
-		String FileSysTableName = getFileSysTableName(shareName);
+		String FileSysTableName = FileSysTable_COMMFILE;
+		String FileRevisionTableName = FileRevisionTable_COMMFILE;
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			FileSysTableName = FileSysTable_MYFILE;
+			FileRevisionTableName = FileRevisionTable_MYFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			FileSysTableName = FileSysTable_COMMFILE;
+			FileRevisionTableName = FileRevisionTable_COMMFILE;
+		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
+		{
+			FileSysTableName = FileSysTable_SHAREFILE;
+			FileRevisionTableName = FileRevisionTable_SHAREFILE;
+		}
 		
 //		if (dirId <= 0
 //				&& searchPath.toLowerCase().startsWith(
@@ -3517,8 +3542,6 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				sql.append(" WHERE  status >= 0 AND pid = ").append(dirId);
 				if (dirId == 0) {
 					sql.append(" AND type IN(0,2)");
-					sql.append(" AND (commonfile_enabled = '1' OR commonfile_enabled is null " +
-							"OR trim(commonfile_enabled) = '' ) ");
 				}
 			} else {
 				// 查询语句
@@ -4994,7 +5017,19 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		// DEBUG
 		long startTime = System.currentTimeMillis();
 		// Load the file data fragments
-		String FileRevisionTableName = getRevisionTableName(shareName);
+		String FileSysTableName = FileSysTable_COMMFILE;
+		String FileRevisionTableName = FileRevisionTable_COMMFILE;
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			FileSysTableName = FileSysTable_MYFILE;
+			FileRevisionTableName = FileRevisionTable_MYFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			FileSysTableName = FileSysTable_COMMFILE;
+			FileRevisionTableName = FileRevisionTable_COMMFILE;
+		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
+		{
+			FileSysTableName = FileSysTable_SHAREFILE;
+			FileRevisionTableName = FileRevisionTable_SHAREFILE;
+		}
 
 		Connection conn = null;
 		Statement stmt = null;
@@ -5002,8 +5037,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			// Get a connection to the database, create a statement
 			conn = getConnection();
 			stmt = conn.createStatement();
-			// 为什么要查询 FileRevisionTableName， 而不是 FileSysTableName !!??
-			String sql = "SELECT id,storePath,rollPath,lastModified,size FROM " +FileRevisionTableName + " WHERE status>=-1111 AND fileId = " + (fileId) + " ORDER BY revision DESC,id DESC";// 只查有效的版本
+			String sql = "SELECT id,storePath,rollPath,lastModified,size FROM " +FileRevisionTableName + " WHERE status>=0 AND fileId = " + fileId + " ORDER BY revision DESC,id DESC";// 只查有效的版本
 
 			String rollPath = null;
 			String storePath = null;
@@ -5026,7 +5060,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 				if(StringUtils.isNotEmpty(filePath))
 				{
 					rollFile = new File(filePath);
-					if(null ==rollFile || (null != rollFile && rollFile.exists() == false) || !(storePath.endsWith(".LFS") || storePath.endsWith(".LFN")))
+					if(null ==rollFile || (null != rollFile && rollFile.exists() == false) || !storePath.endsWith(".LFS"))
 					{
 						if(StringUtils.isNotEmpty(storePath))
 							rollFile = new File(storePath);//临时文件地址
@@ -5054,36 +5088,34 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 						return DBFileLoader.StsError;// 失败
 					}
 				}
-				else if(storePath.endsWith(".LFS") || storePath.endsWith(".LFN"))//如果是.LFS或.LFN表示是LFS存储文件
+				else if(storePath.endsWith(".LFS"))
 				{
-//					if(uFile.exists() && uFile.length()>0 && uFile.lastModified()>lastModified)
-//					{
-//						log4j.debug("DBI#loadFileData临时文件存在且较新，暂不重新加载..");
-//					}
-//					else
-//					{
-					//新版本，直接从缓存加载会报错，所以重新加载(缓存中的uFile可能内容不正常) log4j.debug("DBI#loadFileData临时文件存在且较新，暂不重新加载..");
+					if(uFile.exists() && uFile.length()>0 && uFile.lastModified()>lastModified)
+					{
+						log4j.debug("DBI#loadFileData临时文件存在且较新，暂不重新加载..");
+					}
+					else
+					{
 					AESUtil.decryptFile(rollFile, uFile);
 					log4j.debug("DBI#loadFileData加密文件转换完成; uFile:" + uFile.exists() + " , length:"
 								+ uFile.length() + " , fileSeg.fileExists:"
 								+ fileSeg.fileExists() + " ,isDataAvailable:"
 								+ fileSeg.isDataAvailable() + ", sfileLength:"
 								+ fileSeg.getFileLength());
-//					}
+					}
 				}
 				else
 				{
-//					if(uFile.exists() && uFile.length()>0 && uFile.lastModified()>rollFile.lastModified())
-//					{
-//						log4j.debug("DBI#loadFileData临时文件存在且较新，暂不重新加载..");
-//					}
-//					else
-//					{
-					//新版本，直接从缓存加载会报错，所以重新加载(缓存中的uFile可能内容不正常) log4j.debug("DBI#loadFileData临时文件存在且较新，暂不重新加载..");
+					if(uFile.exists() && uFile.length()>0 && uFile.lastModified()>rollFile.lastModified())
+					{
+						log4j.debug("DBI#loadFileData临时文件存在且较新，暂不重新加载..");
+					}
+					else
+					{
 						DiskUtil.copySingeFile(rollFile, uFile);
 						log4j.debug("DBI#loadFileData加载未处理完的缓存文件 , exists:"+uFile.exists()+", length:"+uFile.length());
-//					}
-				}	
+					}
+				}			
 				long endTime = System.currentTimeMillis();
 				log4j.debug("[mySQL] Loaded fid=" + fileId + ", stream=" + streamId
 						+ ", frags=" + ", time=" + (endTime - startTime) + "ms");
@@ -5108,16 +5140,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 					fileSeg.setReadableLength(uFile.length());//设置大小
 					fileSeg.signalDataAvailable();//设置为可用
 				}
-
-				//清理一下文件 ，可能是~$xxx.doc文件，从web,或客户端编辑后not file record from DB
-				// Set the file status to indicate error to any client reading threads
-				fileSeg.setStatus(FileSegmentInfo.Error, false);
-				// Wakeup any threads waiting on data for this file
-//				fileSeg.setReadableLength(0L);
-//				fileSeg.signalDataAvailable();
-//				// Delete the temporary file
-//				fileSeg.deleteTemporaryFile();
-				log4j.error("DBI#loadFileData ERROR ,not file record from DB " + fileSeg);
+				log4j.error("DBI#loadFileData ERROR ,not file record from DB ");
 				return DBFileLoader.StsError;// 失败
 			}			
 		} catch (SQLException ex) {
@@ -5474,8 +5497,19 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 //		PreparedStatement istmt = null;
 		Statement stmt = null;
 		
-		String FileSysTableName = getFileSysTableName(shareName);
-		String FileRevisionTableName = getRevisionTableName(shareName);
+		String FileSysTableName = FileSysTable_COMMFILE;
+		String FileRevisionTableName = FileRevisionTable_COMMFILE;
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			FileSysTableName = FileSysTable_MYFILE;
+			FileRevisionTableName = FileRevisionTable_MYFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			FileSysTableName = FileSysTable_COMMFILE;
+			FileRevisionTableName = FileRevisionTable_COMMFILE;
+		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
+		{
+			FileSysTableName = FileSysTable_SHAREFILE;
+			FileRevisionTableName = FileRevisionTable_SHAREFILE;
+		}
 
 		int jarId = -1;
 		
@@ -6344,7 +6378,19 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 	private String buildPathForFileId(int fileid, Statement stmt,String shareName) {
 
 		// Build an array of folder names working back from the files id
-		String FileSysTableName = getFileSysTableName(shareName);
+		String FileSysTableName = FileSysTable_COMMFILE;
+		String FileRevisionTableName = FileRevisionTable_COMMFILE;
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			FileSysTableName = FileSysTable_MYFILE;
+			FileRevisionTableName = FileRevisionTable_MYFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			FileSysTableName = FileSysTable_COMMFILE;
+			FileRevisionTableName = FileRevisionTable_COMMFILE;
+		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
+		{
+			FileSysTableName = FileSysTable_SHAREFILE;
+			FileRevisionTableName = FileRevisionTable_SHAREFILE;
+		}
 		StringList names = new StringList();
 
 		try {
@@ -6859,17 +6905,12 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 
 	/**
 	 * rootPath_bak 值暂不用
-	 * 
-	 * docx 文件打开时会调用这个方法， 保存时候却不会！
-	 * 
-	 * 
 	 */
 	public int saveFileArchive(String rootPath_bak, String tempDir, int fileId,
 			File uFile, String shareName, FileSegment fileSeg)
 			throws SQLException, DBException, IOException {
 
 		String fileName = uFile.getName();
-		fileName = extractFileName(fileName);
 		log4j.debug("DBI#saveFileArchive, time:" + System.currentTimeMillis()
 				+ ", fname:" + fileName + ", fileId:" + fileId+", shareName:"+shareName);
 		/*
@@ -6880,8 +6921,19 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		 * return -1; }
 		 */
 		
-		String FileSysTableName = getFileSysTableName(shareName);
-		String FileRevisionTableName = getRevisionTableName(shareName);
+		String FileSysTableName = FileSysTable_COMMFILE;
+		String FileRevisionTableName = FileRevisionTable_COMMFILE;
+		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+			FileSysTableName = FileSysTable_MYFILE;
+			FileRevisionTableName = FileRevisionTable_MYFILE;
+		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+			FileSysTableName = FileSysTable_COMMFILE;
+			FileRevisionTableName = FileRevisionTable_COMMFILE;
+		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
+		{
+			FileSysTableName = FileSysTable_SHAREFILE;
+			FileRevisionTableName = FileRevisionTable_SHAREFILE;
+		}
 		
 		String rootPath = "";
 		String description = "";
@@ -6896,7 +6948,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			stmt = conn.createStatement();
 			ResultSet rs;
 			// 上传的文件不存在时,不创建记录
-			if (uFile.exists() && (uFile.length() > 0)) {//   || fileName.endsWith(".xls") 2003 xls文件不需要满足length>0 以免报错而保存失败
+			if (uFile.exists() && uFile.length() > 0) {
 //				FileParser fp = new FileParser(uFile, fileName);// 提取内容
 //				description = fp.getDescription();
 //				description = checkNameForSpecialChars(description);//替换特殊符
@@ -6922,7 +6974,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 					throw new DiskFullException( "Roll Disk is Full ,rootPath : " + rootPath);
 				}
 				
-				synchronized (this)// 暂时改为同步。 避免产生重复文件 // 因为多线程的原因，调试到这来的时候卡主，线程变成 stepping状态
+				synchronized (this)// 暂时改为同步。 避免产生重复文件
 				{
 					// 如果已经存在且内容相同则不更新，直接成功
 					
@@ -7025,14 +7077,9 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 							String resultMd5 = this.getMD5(fileMD5, rootPath, archiveFilePath, uFile,FileRevisionTableName,FileSysTableName,conn);
 							if(resultMd5 != "" )
 							{
-								if((AESUtil.encrypt && resultMd5.endsWith(".LFN")) || (!AESUtil.encrypt && resultMd5.endsWith(".LFS")) ) {
-									//1133410083_d2d027d91708bce4bfead542300c359b.LFN  ldr_2061_2255_新建 Microsoft Excel 工作表.xlsx
-								} else {
-									String[] root = resultMd5.split(",");
-									rootPath = root[0];
-									archiveFilePath = root[1];
-								}
-								
+								String[] root = resultMd5.split(",");
+								rootPath = root[0];
+								archiveFilePath = root[1];
 							}
 							/*String Md5Sql = "SELECT storePath,rollPath FROM  "+FileRevisionTableName+" WHERE md5 = '"+fileMD5+"' ORDER BY id DESC";
 							ResultSet md5Rs = stmt.executeQuery(Md5Sql);
@@ -7052,20 +7099,17 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 								}
 							}*/
 						}
-						String maxRevisionSql = "SELECT max(revision) as revision, max(revisionCount) as revisionCount " +
-								"FROM " +FileRevisionTableName + " WHERE status>=0 AND fileId=" + fileId;// + " and name = '"+ fileName+"'";
+						String maxRevisionSql = "SELECT max(revision) as revision FROM " +FileRevisionTableName + " WHERE status>=0 AND fileId=" + fileId;
+						long maxRevision = 0;
 						log4j.debug("[mySQL] max maxRevision SQL: " + maxRevisionSql);
 						ResultSet rRs1 = stmt.executeQuery(maxRevisionSql);
 						int revisionCop = 0;
-						int revisionCount = 0;
 						if(rRs1.next())
 						{
 							revisionCop = rRs1.getInt("revision");
-							revisionCount = rRs1.getInt("revisionCount");
 						}
 						rRs1.close();
 						
-						long maxRevision = 0;
 						ResultSet rRs = stmt.executeQuery(findMaxRevision_hql);
 						if (rRs.next()) {
 							maxRevision = rRs.getInt("max_value");
@@ -7080,139 +7124,84 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 						String fSql = "";
 						try {
 							if (revisionCop > 0) {
-								int revisionFid = fileId;
-								if(oldFileId>0)
-									revisionFid = oldFileId;
-								int newRevision = revisionCop + 1;
-								revisionCount = revisionCount+1;
-								if (fileName.endsWith(".txt")) {
-									//复制
-									sql ="INSERT INTO "+FileRevisionTableName+" (fileid,name,tags,md5,size,lastModified,userId,revision,revisionCount,status,rollPath,storePath,description)" +
-									" SELECT "+ revisionFid +" as fileid, name,tags, '"+ fileMD5 +"' as md5," + uFile.length() + " as size," + nowDate.getTime() + " as lastModified,userId," +
-									newRevision+ " as revision, "+revisionCount+" as revisionCount,0 as status,'"+rootPath+ "' as rollPath,'"+archiveFilePath+ "' as storePath," +
-									" '" +  checkNameForSpecialChars(description) + "' as description from jweb_commonfilerevision WHERE  fileId = " + revisionFid+" AND revision=" + 
-									revisionCop + " LIMIT 1";
-									log4j.debug("[mySQL]  UPDATE file 复制版本 :\n" + sql);// 养成变成好习惯， 而不是总是该来改去！
-									if (stmt.executeUpdate(sql) > 0) {// sql 这个sql，一直是没看到执行成功， 由于revision过大。 为什么要这么写
-										//fSql = "update " + FileSysTableName + " set revision="+maxRevision+",revisionCount=revisionCount+1 WHERE id =" + fileId;
-										fSql = "INSERT INTO "
-												+ FileSysTableName
-												+ "(path,name,add_time,lastModified,pid,isFile,size,description,userId,revision,revisionCount,status,md5)"
-												+ " SELECT path,name,add_time, " + nowDate.getTime() + " as lastModified,pid,isFile," + uFile.length() + " as size, '" +  checkNameForSpecialChars(description) + "' as description," 
-												+ " userId,"+newRevision+ " as revision, "+revisionCount+" as revisionCount,0 as status, '"+ fileMD5 +"' as md5 from " + FileSysTableName
-												+ " WHERE id =" + revisionFid + " LIMIT 1";
-										
-										log4j.debug("[mySQL] UPDATE file 更新版本号 :\n" + fSql);
-										//fSql = "update " + FileSysTableName + " set revision="+revisionCop+",revisionCount=revisionCount+1 md5 ='" + fileMD5 + "',size = " + uFile.length() + ",description ='" + checkNameForSpecialChars(description) + "',lastModified=" + nowDate.getTime() + " WHERE id =" + fileId;
-										
-										String fileNameShort = fileName;
-//										if(fileName.contains("_"+fid+"_")) {
-//											int lastIndexOf = fileName.lastIndexOf("_"+fid+"_");
-//											fileNameShort = fileName.substring(lastIndexOf+("_"+fid+"_").length());
-//										}
-										int update = stmt.executeUpdate(fSql);
-										if (update==1) {
-											sql = "UPDATE " + FileRevisionTableName + " SET fileId=( SELECT MAX(id) FROM "+FileSysTableName+" WHERE pid="+pid+" AND name = '"+fileNameShort+"') WHERE  fileId=" + revisionFid;//不需要用revision区分
-											int update2 = stmt.executeUpdate(sql);
-											if (update2 >= 1) {
-												fSql = "UPDATE " + FileSysTableName + " SET status = -1 WHERE pid = "+pid+" AND name = '"+fileNameShort+"' AND revision <> "+newRevision;
-												stmt.executeUpdate(fSql);
-												stmt.executeUpdate(updateMaxRevision_hql);
-											}
+								if(existMd5.length()==32 && oldFileId==0)
+								{
+										//复制
+										sql ="INSERT INTO "+FileRevisionTableName+" (fileid,name,tags,md5,size,lastModified,userId,revision,revisionCount,status,rollPath,storePath,description)" +
+										" SELECT distinct fileid, name,tags,md5,size,lastModified,userId,revision+1 as revision,revisionCount+1 as revisionCount, status,rollPath,storePath,description from jweb_commonfilerevision WHERE  fileId = " + fileId+" AND revision=" + maxRevision;
+										log4j.debug("[mySQL]  UPDATE file 复制版本 :\n" + fSql);
+										if (stmt.executeUpdate(sql) > 0) {
+											fSql = "update " + FileSysTableName + " set revision="+maxRevision+",revisionCount=revisionCount+1 WHERE id =" + fileId;
+											log4j.debug("[mySQL] UPDATE file 更新版本号 :\n" + fSql);
+											stmt.executeUpdate(fSql);
 										}
-									}
-								} else {
-									
-									if(existMd5.length()==32 && oldFileId==0)
-									{
-											//复制
-											sql ="INSERT INTO "+FileRevisionTableName+" (fileid,name,tags,md5,size,lastModified,userId,revision,revisionCount,status,rollPath,storePath,description)" +
-											" SELECT distinct fileid, name,tags,md5,size,lastModified,userId,revision+1 as revision,revisionCount+1 as revisionCount, status,rollPath,storePath,description from jweb_commonfilerevision WHERE  fileId = " + fileId+" AND revision=" + maxRevision;
-											log4j.debug("[mySQL]  UPDATE file 复制版本 :\n" + fSql);
-											if (stmt.executeUpdate(sql) > 0) {
-												fSql = "update " + FileSysTableName + " set revision="+maxRevision+",revisionCount=revisionCount+1 WHERE id =" + fileId;
-												log4j.debug("[mySQL] UPDATE file 更新版本号 :\n" + fSql);
-												stmt.executeUpdate(fSql);
-											}
-									}
-									// 更新				
-		//							sql = "UPDATE " + getFileRevisionTable() + " set status=0, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
-		//							+ ",lastModified=" + nowDate.getTime() + ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE fileId=" + fileId +" AND revision=" + maxRevision;
-									String revisionStr = "";
-									if ((fname.endsWith(".doc") || fname.endsWith(".docx") || fname.endsWith(".xls") || fname.endsWith(".xlsx") 
-											|| fname.endsWith(".ppt")) && !StringUtil.isEmpty(description)) {
-										revisionStr = " AND revision >= "+ (revisionCop-2);// 对于2003word/excel/ppt UPDATE时候需要加版本判断
-									}
-									sql = "UPDATE " + FileRevisionTableName + " set status=0, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
-									+ ",lastModified=" + nowDate.getTime() + ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE  fileId=" + fid + revisionStr;//不需要用revision区分
-									
-									
-//									if(fileName.contains("_"+fid+"_~WRL"))// 现在的临时文件变成了类似 ldr_9_104_~WRD0838.tmp
-									if(fileName.startsWith("~$"))
-									{// 只有 2003 编辑 2003 doc 时候才会有~$文件的保存
-										log4j.error("save +++++++++++++++++++++++  " + fileName);
-										//不更新状态
-										this.deleteId(fid, FileRevisionTableName,FileSysTableName, conn);
-										sql = "UPDATE " + FileRevisionTableName + " set storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
-										+ ",lastModified=" + nowDate.getTime() + ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE fileId=" + fid;
-									}
-									log4j.debug("[mySQL] UPDATE revision :\n" + sql + " Filename : " + fileName);
-									int executeUpdate = stmt.executeUpdate(sql);
-									log4j.debug("[mySQL] UPDATE revision suceeded: \n" + executeUpdate);
-									if ( executeUpdate > 0) {
-										sql = "DELETE FROM " + FileRevisionTableName + " WHERE size=0 AND length(md5)<10 AND fileId=" + fileId + " AND revision<" + existRevision;
-										int executeUpdate2 = stmt.executeUpdate(sql);
-										log4j.debug("[mySQL] DELETE null revision :" + sql + executeUpdate2);
-									}
-									if(oldFileId>0)
-									{
-										sql = "UPDATE " + FileRevisionTableName + " set status=0, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
-										+ ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE status=4 AND fileId=" + oldFileId +" AND revision=" + existRevision;
-										log4j.debug("[mySQL] UPDATE old File revision :\n" + sql);
-										stmt.executeUpdate(sql);
-										fSql = "update " + FileSysTableName + " set md5 ='" + fileMD5 + "',size = " + uFile.length() + ",description ='" + checkNameForSpecialChars(description) + "',lastModified=" + nowDate.getTime() + " WHERE id =" + fileId;
-										if(existRevision==revisionCop)
-										{
-											fSql = "update " + FileSysTableName + " set md5 ='" + fileMD5 + "',size = " + uFile.length() + ",description ='" + checkNameForSpecialChars(description) + "',lastModified=" + nowDate.getTime() + ",status =0 WHERE status>-2 AND id =" + oldFileId;
-										}
-									}
-									else
-									{
-										fSql = "update " + FileSysTableName + " set md5 ='" + fileMD5 + "',size = " + uFile.length() + ",description ='" + checkNameForSpecialChars(description) + "',lastModified=" + nowDate.getTime() + ",status =0 WHERE status>-2 AND id =" + fileId;
-									}
-									log4j.debug("[mySQL] UPDATE file :\n" + fSql);
-									if(stmt.executeUpdate(fSql)>0)
-									{
-										//处理重复记录,按条件处理
-										fSql = "UDATE " + FileSysTableName + " SET status=-1 WHERE status>=0 AND pid = " + pid + " AND id<>"+fileId+" AND LOWER(name)=LOWER('" + checkNameForSpecialChars(fname) + "')";
-										int updateNumber = stmt.executeUpdate(sql);
-										if(updateNumber>0)
-										{
-											log4j.debug("[mySQL] 删除重复文件:\n" + fSql);
-											log4j.error("DBI#saveFileArchive 操作完后有重复的文件"+updateNumber+"个，已经强制删除!");
-										}
-										
-										// DEBUG
-										this.UpLog(userId, pid, fileId, existRevision, nowDate, shareName,FileRevisionTableName,FileSysTableName,conn);
-								/*		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-											String sqlLog = "insert into jweb_file_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
-													+ userId + "," + pid + "," + fileId + "," + existRevision + ",'CIFS更新文件','','" + sf.format(nowDate) + "','CIFS','w'," + 0 + "," + 0 + ")";
-											log4j.debug("[mySQL] sqlLog SQL:" + sqlLog);
-											stmt.executeUpdate(sqlLog);
-										} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-											String sqlLog = "insert into jweb_commonfile_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
-													+ userId + "," + pid + "," + fileId + "," + existRevision + ",'CIFS更新文件','','" + sf.format(nowDate) + "','CIFS','w'," + 0 + "," + 0 + ")";
-											log4j.debug("[mySQL] sqlLog SQL:" + sqlLog);
-											stmt.executeUpdate(sqlLog);
-										}*/
-									}
-									stmt.executeUpdate(updateMaxRevision_hql);
 								}
+								// 更新				
+	//							sql = "UPDATE " + getFileRevisionTable() + " set status=0, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
+	//							+ ",lastModified=" + nowDate.getTime() + ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE fileId=" + fileId +" AND revision=" + maxRevision;
+								sql = "UPDATE " + FileRevisionTableName + " set status=0, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
+								+ ",lastModified=" + nowDate.getTime() + ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE  fileId=" + fid;//不需要用revision区分
+								if(fileName.startsWith("~$"))
+								{
+									//不更新状态
+									this.deleteId(fid, FileRevisionTableName,FileSysTableName, conn);
+									sql = "UPDATE " + FileRevisionTableName + " set storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
+									+ ",lastModified=" + nowDate.getTime() + ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE fileId=" + fid;
+								}
+								log4j.debug("[mySQL] UPDATE revision :\n" + sql);
+								if (stmt.executeUpdate(sql) > 0) {
+									sql = "DELETE FROM " + FileRevisionTableName + " WHERE size=0 AND length(md5)<10 AND fileId=" + fileId + " AND revision<" + existRevision;
+									log4j.debug("[mySQL] DELETE null revision :" + sql);
+									stmt.executeUpdate(sql);
+								}
+								if(oldFileId>0)
+								{
+									sql = "UPDATE " + FileRevisionTableName + " set status=0, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
+									+ ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE status=4 AND fileId=" + oldFileId +" AND revision=" + existRevision;
+									log4j.debug("[mySQL] UPDATE old File revision :\n" + sql);
+									stmt.executeUpdate(sql);
+									fSql = "update " + FileSysTableName + " set md5 ='" + fileMD5 + "',size = " + uFile.length() + ",description ='" + checkNameForSpecialChars(description) + "',lastModified=" + nowDate.getTime() + " WHERE id =" + fileId;
+									if(existRevision==revisionCop)
+									{
+										fSql = "update " + FileSysTableName + " set md5 ='" + fileMD5 + "',size = " + uFile.length() + ",description ='" + checkNameForSpecialChars(description) + "',lastModified=" + nowDate.getTime() + ",status =0 WHERE status>-2 AND id =" + oldFileId;
+									}
+								}
+								else
+								{
+									fSql = "update " + FileSysTableName + " set md5 ='" + fileMD5 + "',size = " + uFile.length() + ",description ='" + checkNameForSpecialChars(description) + "',lastModified=" + nowDate.getTime() + ",status =0 WHERE status>-2 AND id =" + fileId;
+								}
+								log4j.debug("[mySQL] UPDATE file :\n" + fSql);
+								if(stmt.executeUpdate(fSql)>0)
+								{
+									//处理重复记录,按条件处理
+									fSql = "UDATE " + FileSysTableName + " SET status=-1 WHERE status>=0 AND pid = " + pid + " AND id<>"+fileId+" AND LOWER(name)=LOWER('" + checkNameForSpecialChars(fname) + "')";
+									int updateNumber = stmt.executeUpdate(sql);
+									if(updateNumber>0)
+									{
+										log4j.debug("[mySQL] 删除重复文件:\n" + fSql);
+										log4j.error("DBI#saveFileArchive 操作完后有重复的文件"+updateNumber+"个，已经强制删除!");
+									}
+									
+									// DEBUG
+									this.UpLog(userId, pid, fileId, existRevision, nowDate, shareName,FileRevisionTableName,FileSysTableName,conn);
+							/*		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
+										String sqlLog = "insert into jweb_file_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
+												+ userId + "," + pid + "," + fileId + "," + existRevision + ",'CIFS更新文件','','" + sf.format(nowDate) + "','CIFS','w'," + 0 + "," + 0 + ")";
+										log4j.debug("[mySQL] sqlLog SQL:" + sqlLog);
+										stmt.executeUpdate(sqlLog);
+									} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
+										String sqlLog = "insert into jweb_commonfile_log (user_id,path_id,file_id,file_revision,note,ip,create_date,agent_client,operation,content_length,read_length) values ("
+												+ userId + "," + pid + "," + fileId + "," + existRevision + ",'CIFS更新文件','','" + sf.format(nowDate) + "','CIFS','w'," + 0 + "," + 0 + ")";
+										log4j.debug("[mySQL] sqlLog SQL:" + sqlLog);
+										stmt.executeUpdate(sqlLog);
+									}*/
+								}
+								stmt.executeUpdate(updateMaxRevision_hql);
 							} else {
 								sql = "UPDATE " + FileRevisionTableName + " set status=-1, storePath='" + archiveFilePath + "',md5='" + fileMD5 + "',size=" + uFile.length()
 								+ ",lastModified=" + nowDate.getTime() + ",description='" + checkNameForSpecialChars(description) + "',rollPath='" + rootPath + "' WHERE fileId=" + fileId;
 								stmt.executeUpdate(sql);
-								log4j.error("ERROR 被更新的版本记录已经不存在，不执行更新; fileId:" + fileId + " fileName:" + fileName);
+								log4j.error("ERROR 被更新的版本记录已经不存在，不执行更新; fileId:" + fileId);
 							}
 						} catch (SQLException e) {
 							log4j.error("## DBFileLoader storeSingleFile SQLException error ; \nsql:"+ sql+ "\nfSql:"+ fSql+ "  ; "+ e.getMessage());
@@ -7225,8 +7214,7 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 			
 			} else {
 				// DEBUG
-				log4j.error("  uploadFile is 0 size : fileId:" + fileId + ", file:" + uFile.getAbsolutePath()
-						+ ", file exists :" + uFile.exists());
+				log4j.error("  uploadFile is 0 size : fileId:" + fileId + ", file:" + uFile.getAbsolutePath());
 				// Return an error status
 				return StsError;
 			}
@@ -7665,59 +7653,4 @@ public class MySQLDBLInterface extends JdbcDBLInterface implements
 		  
 	}
 
-
-	/**
-	 * Return the FileSysTableName by shareName
-	 * 
-	 * @return String
-	 */
-	protected final String getFileSysTableName(String shareName) {
-
-		String FileSysTableName = FileSysTable_COMMFILE;
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-			FileSysTableName = FileSysTable_MYFILE;
-		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-			//FileSysTableName = FileSysTable_COMMFILE;
-		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-		{
-			FileSysTableName = FileSysTable_SHAREFILE;
-		}
-		return FileSysTableName;
-	}
-	
-	/**
-	 * Return the RevisionTableName by shareName
-	 * 
-	 * @return String
-	 */
-	protected final String getRevisionTableName(String shareName) {
-		String FileRevisionTableName = FileRevisionTable_COMMFILE;
-		if (shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)) {
-			FileRevisionTableName = FileRevisionTable_MYFILE;
-		} else if (shareName.equals(DBUtil.SHARENAME_COMMFILE) || shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS)) {
-			//FileRevisionTableName = FileRevisionTable_COMMFILE;
-		} else if(shareName.equals(DBUtil.SHARENAME_RECIVEFILE))
-		{
-			FileRevisionTableName = FileRevisionTable_SHAREFILE;
-		}
-		return FileRevisionTableName;
-	}
-	
-	/**
-	 * 将文件名从诸如 "ldr_9_104_~$WRD0838.tmp"的形式 抽取出 ~$WRD0838.tmp
-	 * @param oldFileName
-	 * @return
-	 */
-	public static String extractFileName(String oldFileName) {
-		if (oldFileName == null) {
-			return null;
-		}
-		String regex = "\\w+_\\d+_\\d+_";
-		Pattern p = Pattern.compile(regex);
-		Matcher matcher = p.matcher(oldFileName);
-		while (matcher.find()) {
-			return oldFileName.substring(matcher.group().length());
-		}
-		return null;
-	}
 }

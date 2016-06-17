@@ -1928,7 +1928,7 @@ public class MySQLDBWasCommonInterface extends JdbcDBInterface implements
 				sql.append("id,pid,name,size,add_time,lastModified,isFile,userId,permissionsFileId,islock,lockedByUser");
 			}
 			else {
-				sql.append("id,pid,fname,size,create_date,last_modified,isFile,user_id,operate");
+				sql.append("id,pid,fname,size,create_date,last_modified,isFile,user_id");
 			}
 			break;
 
@@ -2011,9 +2011,9 @@ public class MySQLDBWasCommonInterface extends JdbcDBInterface implements
 					// Build the file attributes flags
 
 					int attr = 0;
-					 if ( rs.getString("operate").equals("r")){
-						 attr += FileAttribute.ReadOnly;
-					 }
+					
+					// if ( rs.getBoolean("ReadOnly") == true)
+					// attr += FileAttribute.ReadOnly;
 
 					// if ( rs.getBoolean("SystemFile") == true)
 					// attr += FileAttribute.System;
@@ -4887,7 +4887,7 @@ public class MySQLDBWasCommonInterface extends JdbcDBInterface implements
 					return DBFileLoader.StsError;// 失败
 				}
 			}
-			else if(storePath.endsWith(".LFS") || storePath.endsWith(".LFN"))//如果是.LFS或.LFN表示是LFS存储文件
+			else if(storePath.endsWith(".LFS"))
 			{
 				AESUtil.decryptFile(rollFile, uFile);
 				log4j.debug("加密文件转换完成; uFile:" + uFile.exists() + " , length:"

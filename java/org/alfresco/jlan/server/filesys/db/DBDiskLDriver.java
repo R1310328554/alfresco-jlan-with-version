@@ -130,11 +130,6 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
   public void closeFile(SrvSession sess, TreeConnection tree, NetworkFile file)
     throws IOException {
 	
-//	if (file.getFileSize() == 0 && !file.isDirectory()) {
-//		log4j.error("DBD#closeFile() filesize == 0 !");
-//		return;
-//	}
-	  
     //  Access the database context
     DBDeviceContext dbCtx = (DBDeviceContext) tree.getContext();
 //    String shareName = tree.getContext().getShareName();
@@ -582,7 +577,7 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
     //  Split the path string and find the directory id to attach the file to
     String shareName = DiskUtil.findFristPath(params.getPath());
     int dirId = findParentDirectoryId(dbCtx,params.getPath(),true,userName,shareName);
-    if ( dirId == -1)// 长时间不操作， 可能导致这里获取ParentDirectoryId 不到！
+    if ( dirId == -1)
     {
     	log4j.error("Cannot find parent directory path:"+params.getPath());
       throw new IOException("Cannot find parent directory");
@@ -658,13 +653,7 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
       	// Check if the file can be opened in the requested mode
     	//
     	// Note: The file status is set to NotExist at this point, the file record creation may fail
-
-    	  int filestate = FileStatus.FileExists;
-//    	  if (fname.endsWith("docx") || (fname.toLowerCase().startsWith("~") && fname.endsWith("tmp"))) {
-//    		  filestate = FileStatus.NotExist;
-//    		} else {
-//    		
-//    		}
+      	
       	accessToken = dbCtx.getStateCache().grantFileAccess( params, fstate, FileStatus.NotExist);
       }
       int fid = dbCtx.getDBInterface().createFileRecord(fname, dirId, params, retain,userName,shareName,ipAddress);
@@ -859,6 +848,7 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
    */
   public void deleteFile(SrvSession sess, TreeConnection tree, String name)
     throws IOException {
+     
     //  Access the JDBC context
 	  String userName = sess.getClientInformation().getUserName();
 //	  String shareName = tree.getContext().getShareName();
@@ -866,7 +856,6 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
 	  String ipAddress = sess.getClientInformation().getClientAddress();
 	 
     DBDeviceContext dbCtx = (DBDeviceContext) tree.getContext();
-    
     if(shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE))
     {
     	log4j.warn(shareName+", 不允许删除");
@@ -899,12 +888,13 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
     	if(StringUtils.isEmpty(ext) || "tmp".equals(ext))
   	  {
   		  log4j.warn("DBD#deleteFile() 未产生的临时文件不返回 File does not exist  name:"+name);
+//  		  return ;// 不往下执行
   	  }
   	  else
   	  {
   		log4j.warn("File does not exist, " + name);
+//    	throw new FileNotFoundException("File does not exist, " + name);
   	  }
-    	throw new FileNotFoundException("File does not exist, " + name);
     }
     
     //  Create a file state for the file, if not already valid
@@ -922,34 +912,27 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
       
       if ( fstate.hasActiveRetentionPeriod())
       {
+    	  log4j.error("File retention active");
         throw new AccessDeniedException("File retention active");
       }
 
       //  Get the file details
+      
       dbInfo = getFileDetails(name, dbCtx, fstate,userName,shareName);
       
-      String fname = null;
       if ( dbInfo == null)
       {
     	  
-//    	  if(StringUtils.isEmpty(ext) || "tmp".equals(ext))
-//    	  {
-//    		  log4j.error("DBD#deleteFile() 未产生的临时文件不返回 FileNotFoundException  name:"+name);
-//    		  int lastIndexOf = name.lastIndexOf("\\");//固定为\\,而非File.separatorChar
-//    		  fname = name.substring(lastIndexOf==-1?0:lastIndexOf+1);
-//    		  if (fname != null && fname.startsWith("~") && fname.endsWith(".tmp")) {
-//    			  // 同时删除tmp 临时文件
-//    			  //TODO
-//			  } else {
-//				  return ;// 不往下执行
-//			}
-//    		  
-//    	  }
-//    	  else
-//    	  {
-//    	  }
-//		  log4j.error("DBD#deleteFile() FileNotFoundException  name:"+name);
-		  throw new FileNotFoundException(name);
+    	  if(StringUtils.isEmpty(ext) || "tmp".equals(ext))
+    	  {
+    		  log4j.error("DBD#deleteFile() 未产生的临时文件不返回 FileNotFoundException  name:"+name);
+//    		  return ;// 不往下执行
+    	  }
+    	  else
+    	  {
+    		  log4j.error("DBD#deleteFile() FileNotFoundException  name:"+name);
+    		  throw new FileNotFoundException(name);
+    	  }
       }
       
       //  DEBUG
@@ -988,10 +971,8 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
       //  Delete the file in the filesystem/repository, the loader may prevent the file delete by throwing
       //  an exception
 //      boolean canDel = !"xls".equals(ext);//xls不能删除关联对象,xls2003会报错
-      boolean canDel = (!"xls".equals(ext) && !"xlsx".equals(ext)) && 
-    		  (!"ppt".equals(ext) && !"pptx".equals(ext)) && 
-    		  (!"doc".equals(ext) && !"docx".equals(ext));//xls不能删除关联对象,xls2003会报错
-	  if ( dbCtx.isTrashCanEnabled() == false);// && canDel)
+      boolean canDel = (!"xls".equals(ext) && !"xlsx".equals(ext))||(!"doc".equals(ext) && !"docx".equals(ext));//xls不能删除关联对象,xls2003会报错
+      if ( dbCtx.isTrashCanEnabled() == false && canDel)
         dbCtx.getFileLoader().deleteFile(name,fstate.getFileId(), 0,shareName);
 
       //  If the file is a symbolic link delete the symbolic link record
@@ -1001,7 +982,7 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
       
       /* 这部分可能导致保存后，WPS保存doc及时 (加上这一段Office2007编辑时会报错）
       // Check if the file has any NTFS streams
-      */
+      
       StreamInfoList streamList = getStreamList( sess, tree, name);
       
       if ( streamList != null && streamList.numberOfStreams() > 0) {
@@ -1040,26 +1021,22 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
           if ( delCnt > 0)
         	  log4j.debug("DBD#deleted " + delCnt + " streams for name=" + name);
       }
-      
+      */
       //  Delete the file record
-	  
-      if(null != dbInfo && null != fstate) {
-		  dbCtx.getDBInterface().deleteFileRecord(dbInfo.getDirectoryId(), fstate.getFileId(), dbCtx.isTrashCanEnabled(),userName,shareName,ipAddress);
-      }
+      if(null != dbInfo && null != fstate)
+    	  dbCtx.getDBInterface().deleteFileRecord(dbInfo.getDirectoryId(), fstate.getFileId(), dbCtx.isTrashCanEnabled(),userName,shareName,ipAddress);
       
       //  Indicate that the path does not exist
       /*  这部分可能导致保存后，提示权限不对。暂不执行*/
 //      if("tmp".equals(ext)|| "xls".equals(ext))
 //    	if("tmp".equals(ext)|| "xls".equals(ext) || "xlsx".equals(ext) || (name.startsWith("~$") && "doc".equals(ext)) || (name.startsWith("~$") && "docx".equals(ext)))
 //      if("tmp".equals(ext) || "xls".equals(ext)  || (name.startsWith("~$") && "doc".equals(ext))||(name.startsWith("~$") && "xlsx".equals(ext)))
-//      if("tmp".equals(ext) || "xls".equals(ext)  || (name.startsWith("~$") && "doc".equals(ext))
-//    		  ||(name.startsWith("~$") && "xlsx".equals(ext))
-//    		  ||("pptx".equals(ext) ||"ppt".equals(ext))) //name.startsWith("~$") && 
-//	  {
+      if("tmp".equals(ext) || "xls".equals(ext)  || (name.startsWith("~$") && "doc".equals(ext))||(name.startsWith("~$") && "xlsx".equals(ext)))
+      {
 	      fstate.setFileStatus( FileStatus.NotExist, FileState.ReasonFileDeleted);
 	      fstate.setFileId(-1);
 	      log4j.warn("DBD#deleteFile() FileStatus.NotExist-fstate.setFileId(-1): name"+name+" , ext:"+ext);
-//      }
+      }
       fstate.removeAttribute(FileState.FileInformation);
       
       //  Check if there is a quota manager, if so then release the file space
@@ -1112,14 +1089,7 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
 //    	log4j.warn("DBD#fileExists 不符合规则的name参数 , 直接返回 NotExist ; name:"+name);
 //    	return FileStatus.NotExist;
 //    }
-  //增加根路径的直接返回目录存在(如:username@/我的文件; username@/资料库)
-    if(name.equalsIgnoreCase("\\"+shareName))
-    {
-    	if(shareName.equalsIgnoreCase(DBUtil.SHARENAME_USERFILE)||shareName.equalsIgnoreCase(DBUtil.SHARENAME_RECIVEFILE)||shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE)||shareName.equalsIgnoreCase(DBUtil.SHARENAME_COMMFILE_ALIAS))
-    	{
-    		return FileStatus.DirectoryExists;
-    	}
-    }
+    
         
     if ( FileName.containsStreamName(name)) {
       
@@ -1616,19 +1586,10 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
 	  String userName = sess.getClientInformation().getUserName();
 //	  String shareName = tree.getContext().getShareName();
 	  log4j.debug("DBD#renameFile() ,time:"+System.currentTimeMillis()+", from=" + oldName + " to=" + newName);
-//	  if (oldName.equalsIgnoreCase("\\"+userName+DBUtil.SPECIAL_CHAR)) {
-//	    	log4j.warn(oldName+" ,不允许改名");
-//	    	throw new AccessDeniedException("用户目录不允许改名");
-//	  }
-	  //
-	  //上面的为旧的方式，已经不适用
-	//增加根路径的直接返回目录存在(如:username@/我的文件; username@/资料库)
-	  //
-	if(oldName.equalsIgnoreCase("\\"+DBUtil.SHARENAME_USERFILE)||oldName.equalsIgnoreCase("\\"+DBUtil.SHARENAME_RECIVEFILE)||oldName.equalsIgnoreCase("\\"+DBUtil.SHARENAME_COMMFILE)||oldName.equalsIgnoreCase("\\"+DBUtil.SHARENAME_COMMFILE_ALIAS))
-	 {
-	 	log4j.warn(oldName+" ,不允许改名");
-	   	throw new AccessDeniedException("用户目录不允许改名");
-	}
+	  if (oldName.equalsIgnoreCase("\\"+userName+DBUtil.SPECIAL_CHAR)) {
+	    	log4j.warn(oldName+" ,不允许改名");
+	    	throw new AccessDeniedException("用户目录不允许改名");
+	  }
     //  Access the JDBC context
 
     DBDeviceContext dbCtx = (DBDeviceContext) tree.getContext();
@@ -1725,6 +1686,38 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
       
 //      DBFileInfo newInfo = getFileDetails(newName, dbCtx);
       DBFileInfo newInfo = getFileDetails(newName, dbCtx, null,userName,shareName);//防止shareName 和userName为空的情况
+      if ( newInfo != null)
+      {
+//    	  log4j.warn("Rename to file/folder already exists,继续保存" + newName);
+//    	  boolean isWord2003 = oldName.toLowerCase().endsWith(".tmp") && oldName.indexOf("~")>-1;
+    	  boolean isWord2003 = oldFname.startsWith("~") && oldFname.toLowerCase().endsWith(".tmp") && newName.toLowerCase().endsWith(".doc");
+    	  if(isWord2003)
+    	  {
+    		  //office 保存word文件时，如果存在文件又重命名，会提示保存失败。所以这里这样处理
+    		  log4j.error("isWord2003 FileExistsException oldName:"+oldName+" ,newName:" + newName);
+    		  throw new FileExistsException("Rename to file/folder already exists," + newName);
+    	  }
+      }
+      //如果是word,wps执行将文件改名为其它文件，则不执行
+      String oldExt = DiskUtil.getExt(oldFname);
+      String newExt = DiskUtil.getExt(newFname);
+      boolean isWpsRename = !oldFname.toLowerCase().endsWith(".tmp") && newFname.toLowerCase().endsWith(".tmp");
+      boolean isWordRename = !oldFname.startsWith("~$") && newFname.startsWith("~$");
+      if(isWpsRename || isWordRename)
+      {
+    	  log4j.warn("DBD#renameFile() 改名操作不执行!isWpsRename:"+isWpsRename+" , isWordRename:"+isWordRename+", oldFname:"+oldFname+", newFname:"+newFname);   	  
+//    	  fstate.removeAllAttributes();
+//    	  FileState newFstate = getFileState(newName, dbCtx, true);
+//    	  //file id改变了，可能存在。则清缓存
+//    	  if(null != newFstate)
+//    	  {
+//    		  newFstate.setFileId(0);
+//    		  newFstate.setFileStatus( FileStatus.FileExists, FileState.ReasonFileCreated);
+//    	  }    	  
+//    	  log4j.error("DBD#renameFile() 改名创建的假缓存文件 newFstate:"+newFstate);
+      }
+      else
+      {
     	  
           //  Check if the loader handles rename requests, an exception may be thrown by the loader
           //  to prevent the file/directory rename.
@@ -1739,75 +1732,69 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
           
           //  Get the new file/directory name
           
-      int newDirId = findParentDirectoryId(dbCtx, newName, true,userName,shareName);
-      if ( newDirId == -1)
-      {
-    	  log4j.error("DBD#renameFile() newDirId==-1 FileNotFoundException , name:"+newName);
-        throw new FileNotFoundException(newName);
-      }
-      
-      //  Rename the file/folder, this may also link the file/folder to a new parent directory
-      int newFid = dbCtx.getDBInterface().renameFileRecord(dirId, fid, newFname, newDirId,shareName);
-      //处理改名问题
-      FileSegmentInfo fileSegInfo = (FileSegmentInfo) fstate.findAttribute(ObjectIdFileLoader.DBFileSegmentInfo);
-	  if(null !=fileSegInfo)
-	  {
-
-    	  //log4j.fatal("0000 DBD#renameFile() modifyFileTemporaryFilea  AAAA !! ");
-		  // 对于新建的xls改名--或者简单的xls重命名， 不需要执行下面的方法
-//    		  if (oldFname.endsWith(".xls") || newFname.endsWith(".xls")) {
-//				
-//			} else
-    	  dbCtx.getDBInterface().modifyFileTemporaryFile(newFid,fileSegInfo,shareName);//修改上传的null路径为临时文件路径
-	  }
-	  
-      if(newFid != fid)
-      {
-    	  if ( dbCtx.getFileLoader() instanceof NamedFileLoader) {
-              //  Rename the file/directory
-              NamedFileLoader namedLoader = (NamedFileLoader) dbCtx.getFileLoader();
-              namedLoader.renameFileDirectory(oldName, newFid, newName, curInfo.isDirectory());
+          int newDirId = findParentDirectoryId(dbCtx, newName, true,userName,shareName);
+          if ( newDirId == -1)
+          {
+        	  log4j.error("DBD#renameFile() newDirId==-1 FileNotFoundException , name:"+newName);
+            throw new FileNotFoundException(newName);
           }
-    	  fstate = getFileState(newName, dbCtx, true);
-    	  //file id改变了，可能存在。则清缓存
-    	  if(null != fstate)
+          
+	      //  Rename the file/folder, this may also link the file/folder to a new parent directory
+	      int newFid = dbCtx.getDBInterface().renameFileRecord(dirId, fid, newFname, newDirId,shareName);
+	      //处理改名问题
+	      FileSegmentInfo fileSegInfo = (FileSegmentInfo) fstate.findAttribute(ObjectIdFileLoader.DBFileSegmentInfo);
+    	  if(null !=fileSegInfo)
     	  {
-    		  fstate.setFileId(newFid);
-    		  
-    		  if(null != fileSegInfo)
-    		  {
-    			  File temFile = new File(fileSegInfo.getTemporaryFile());
-    			  if(null != temFile && temFile.length()>0)
-    			  {
-    				  fstate.setFileSize(temFile.length());//重设文件大小
-    			  }
-    		  }
+    	  dbCtx.getDBInterface().modifyFileTemporaryFile(newFid,fileSegInfo,shareName);//修改上传的null路径为临时文件路径
     	  }
-    	  fstate.setFileStatus( FileStatus.FileExists, FileState.ReasonFileCreated);
-    	  /*
-    	     这部分可能导致保存后，提示权限不对。暂不执行
-    	  //删除原来的
-          fstate.setFileStatus( FileStatus.NotExist, FileState.ReasonFileDeleted);
-          fstate.setFileId(-1); 
-          fstate.removeAttribute(FileState.FileInformation);
-    	  fstate = getFileState(newFname, dbCtx, true);//重新获得对象
-    	  //创建
-    	  fstate.setFileStatus( FileStatus.FileExists, FileState.ReasonFileCreated);
-          //  Save the file id
-          fstate.setFileId(newFid);
-    	  */
+	      if(newFid != fid)
+	      {
+	    	  if ( dbCtx.getFileLoader() instanceof NamedFileLoader) {
+	              //  Rename the file/directory
+	              NamedFileLoader namedLoader = (NamedFileLoader) dbCtx.getFileLoader();
+	              namedLoader.renameFileDirectory(oldName, newFid, newName, curInfo.isDirectory());
+	          }
+	    	  fstate = getFileState(newName, dbCtx, true);
+	    	  //file id改变了，可能存在。则清缓存
+	    	  if(null != fstate)
+	    	  {
+	    		  fstate.setFileId(newFid);
+	    		  
+	    		  if(null != fileSegInfo)
+	    		  {
+	    			  File temFile = new File(fileSegInfo.getTemporaryFile());
+	    			  if(null != temFile && temFile.length()>0)
+	    			  {
+	    				  fstate.setFileSize(temFile.length());//重设文件大小
+	    			  }
+	    		  }
+	    	  }
+	    	  fstate.setFileStatus( FileStatus.FileExists, FileState.ReasonFileCreated);
+	    	  /*
+	    	     这部分可能导致保存后，提示权限不对。暂不执行
+	    	  //删除原来的
+	          fstate.setFileStatus( FileStatus.NotExist, FileState.ReasonFileDeleted);
+	          fstate.setFileId(-1); 
+	          fstate.removeAttribute(FileState.FileInformation);
+	    	  fstate = getFileState(newFname, dbCtx, true);//重新获得对象
+	    	  //创建
+	    	  fstate.setFileStatus( FileStatus.FileExists, FileState.ReasonFileCreated);
+	          //  Save the file id
+	          fstate.setFileId(newFid);
+	    	  */
+	      }
+	      else
+	      {
+	    	  if ( dbCtx.getFileLoader() instanceof NamedFileLoader) {
+	              //  Rename the file/directory
+	              NamedFileLoader namedLoader = (NamedFileLoader) dbCtx.getFileLoader();
+	              namedLoader.renameFileDirectory(oldName, fid, newName, curInfo.isDirectory());
+	            }
+	      }
+	      //  Update the file state with the new file name/path
+	      dbCtx.getStateCache().renameFileState(newName, fstate, curInfo.isDirectory());
+	      fstate.removeAllAttributes();
       }
-      else
-      {
-    	  if ( dbCtx.getFileLoader() instanceof NamedFileLoader) {
-              //  Rename the file/directory
-              NamedFileLoader namedLoader = (NamedFileLoader) dbCtx.getFileLoader();
-              namedLoader.renameFileDirectory(oldName, fid, newName, curInfo.isDirectory());
-            }
-      }
-      //  Update the file state with the new file name/path
-      dbCtx.getStateCache().renameFileState(newName, fstate, curInfo.isDirectory());
-      fstate.removeAllAttributes();
     }
     catch (DBException ex) {
     	log4j.error("DBD#renameFile() FileNotFoundException , name:"+oldName+" , newName:"+newName,ex);
@@ -2490,30 +2477,6 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
     return getFileDetails(path, dbCtx, null,null,dbCtx.getShareName());
   }
   
-//  private void ss(FileState fstate) {
-//	// TODO Auto-generated method stub
-//
-//      FileSegmentInfo segInfo = (FileSegmentInfo) fstate
-//				.findAttribute("DBFileSegmentInfo");
-//
-//		if (segInfo != null && segInfo.isQueued() == false
-//				&& segInfo.hasStatus() != FileSegmentInfo.SaveWait) {
-//
-//			try {
-//
-//				// Delete the temporary file
-//
-//				segInfo.deleteTemporaryFile();
-//
-//				// Debug
-//				log4j.debug("$$ Deleted temporary file "
-//						+ segInfo.getTemporaryFile() + " [CLOSED] $$");
-//			} catch (IOException ex) {
-//			}
-//		}
-//		
-//}
-  
   /**
    * Get the file id for a file
    * 
@@ -2531,80 +2494,14 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
       //  Return the file information      
       DBFileInfo finfo = (DBFileInfo) fstate.findAttribute(FileState.FileInformation);
       if ( finfo != null)
-      {
-//        return finfo; //暂不用
-      //
-      //强制重新加载(如果finfo的修改时候过小)
-	  //仅处理文件
-	  java.util.Date now = new java.util.Date();
-//	  if(!finfo.isDirectory() && finfo.getSize()>0 && finfo.getInfoLastModifyTime()<(now.getTime()-10000))
-//	  if (path.endsWith(".txt")) {
-//		  return finfo;
-//	  }
-	  
-	  if(!finfo.isDirectory() && finfo.getInfoLastModifyTime()<(now.getTime()-5000))//不用判断size,因为很多情况size为0,10000改为5000，以减少打开文件报错几率
-	  {// 此段代码会导致2007 编辑 2003 xls 打开文件报错： 文件格式不对，。。。。 同时文件的size被设置为了0
-		  log4j.debug("强制重加载  finfo, 超过5秒 ,finfo.createTime: "+finfo.getInfoLastModifyTime()+", now time:"+(now.getTime())+",fname:"+finfo.getFileName()+",fsize:"+finfo.getSize());
-		  try {
-			finfo = dbCtx.getDBInterface().getFileInformation(finfo.getDirectoryId(), finfo.getFileId(), DBInterface.FileAll,finfo.getUid(),shareName,userName);
-			if(null != finfo)
-			{
-				log4j.error("强制重加载  finfo, 后 ,finfo.Modify: "+finfo.getModifyDateTime()+",fsize:"+finfo.getSize());
-				
-				if (finfo.getSize() == 0) {
-					log4j.error("Hell NOO ");
-					return null;
-				}
-//				dbCtx.getStateCache().removeFileState( fstate.getPath());//清理同路径的缓存(非常重要）
-				
-//				ss(fstate);
-				
-				FileSegmentInfo segInfo = (FileSegmentInfo) fstate
-						.findAttribute("DBFileSegmentInfo");
-
-				if (segInfo != null && segInfo.isQueued() == false
-						&& segInfo.hasStatus() != FileSegmentInfo.SaveWait) {
-
-					try {
-
-						// Delete the temporary file
-						log4j.error("Delete the temporary file");
-
-						segInfo.deleteTemporaryFile();
-
-						File tempFile = new File(fstate.getPath());
-
-						tempFile.createNewFile();
-						
-					} catch (IOException ex) {
-						log4j.error("Delete the temporary file ERRER");
-					}
-				}
-				
-				
-				fstate.removeAttribute(FileState.FileInformation);//移除旧的
-				fstate.setFileStatus( finfo.isDirectory() ? FileStatus.DirectoryExists : FileStatus.FileExists);
-			    fstate.setFileId(finfo.getFileId());
-			    fstate.setFileSize(finfo.getSize());
-                //  Attach to the file state	                
-                fstate.addAttribute(FileState.FileInformation, finfo);
-                dbCtx.getStateCache().renameFileState( fstate.getPath(), fstate, false);//清理同路径的缓存(非常重要）
-                
-//                fstate.removeAllAttributes();
-//                dbCtx.getStateCache().
-				return finfo;
-			}
-		} catch (DBException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-	  }
-	  else
-	  {
-		  return finfo;//10秒之类的(或文件夹)返回缓存的finfo
-	  }
-	  //否则不返回，继续下面的操作，重新加载
-      }
+          return finfo;
+////      log4j.debug("DBD#getFileDetails fstate != null ;fileId:"+fstate.getFileId()+" ,fullName:"+fstate.getPath()+" , status:"+fstate.getFileStatus());
+//      if (fstate.getFileStatus()==FileStatus.NotExist && DBUtil.SUPPORT_EXT.contains(ext))
+//      {
+//    	  log4j.debug("DBD#getFileDetails fstate != null 重新执行下面的获得-------"+path);
+//      }
+//      else if ( finfo != null)
+//        return finfo;
     }
     
     //  Check for the root directory    
@@ -2650,22 +2547,6 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
 //    		return null;
 //    	}
 //    }
-  //上面的为旧的方式，已经不适用
-   	//增加根路径的直接返回目录存在(如:username@/我的文件; username@/资料库)
-   	  //
-    if(path.equalsIgnoreCase("\\"+DBUtil.SHARENAME_USERFILE)||path.equalsIgnoreCase("\\"+DBUtil.SHARENAME_RECIVEFILE)||path.equalsIgnoreCase("\\"+DBUtil.SHARENAME_COMMFILE)||path.equalsIgnoreCase("\\"+DBUtil.SHARENAME_COMMFILE_ALIAS))
-	 {
-    	DBFileInfo rootDir = dbCtx.getRootDirectoryInfo();
-    	rootDir.setFileId(0);
-        rootDir.setPath(path);
-        rootDir.setFileName(path);
-        rootDir.setFileName(userName+DBUtil.SPECIAL_CHAR);
-        //  Mark the directory as existing
-        if ( fstate != null)
-          fstate.setFileStatus(FileStatus.DirectoryExists);
-//        log4j.debug("DBD#getFileDetails 返回root目录   fileId:"+rootDir.getFileId()+" , userName:"+userName+" ,fileName:" + rootDir.getFileName());
-        return rootDir;
-	}
     
     //  Split the path string and find the parent directory id    
     int dirId = findParentDirectoryId(dbCtx,path,true,userName,shareName);
@@ -2782,9 +2663,6 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
 	 {
 		  return 0;//\admin@\
 	 }
-	//上面的为旧的方式，已经不适用
-	   	//增加根路径的直接返回目录存在(如:username@/我的文件; username@/资料库)
-	   	  //
 	 if(path.equalsIgnoreCase("\\"+DBUtil.SHARENAME_COMMFILE) || path.equalsIgnoreCase("\\"+DBUtil.SHARENAME_USERFILE) || path.equalsIgnoreCase("\\"+DBUtil.SHARENAME_RECIVEFILE))  //新增加
 	 {
 		  return 0;//\admin@\
@@ -2830,10 +2708,6 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
           
           //  Indicate that the file does not exist
           
-		  if(state.getFileId()>0)
-			{
-        		return state.getFileId();//如果文件ID是大于０的，修改为返回存在(解决报文件路径打不开问题）
-        	}
           return -1;
         }
       }
@@ -2896,13 +2770,6 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
 	  
 	if(null !=path && path.equalsIgnoreCase("\\"+userName+DBUtil.SPECIAL_CHAR))//用户根目录
 		  return 0;
-	//上面的为旧的方式，已经不适用
-   	//增加根路径的直接返回目录存在(如:username@/我的文件; username@/资料库)
-   	  //
-	 if(path.equalsIgnoreCase("\\"+DBUtil.SHARENAME_COMMFILE) || path.equalsIgnoreCase("\\"+DBUtil.SHARENAME_USERFILE) || path.equalsIgnoreCase("\\"+DBUtil.SHARENAME_RECIVEFILE))  //新增加
-	 {
-		  return 0;//\admin@\
-	 }
 	
     //  Split the path
     String[] paths = null;
@@ -2990,14 +2857,6 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
       int[] ids = { 0 };
       return ids;
     }
-  //上面的为旧的方式，已经不适用
-   	//增加根路径的直接返回目录存在(如:username@/我的文件; username@/资料库)
-   	  //
- if(path.equalsIgnoreCase("\\"+DBUtil.SHARENAME_COMMFILE) || path.equalsIgnoreCase("\\"+DBUtil.SHARENAME_USERFILE) || path.equalsIgnoreCase("\\"+DBUtil.SHARENAME_RECIVEFILE))  //新增加
- {
-	 int[] ids = { 0 };
-      return ids;
- }
     if ( paths[0].startsWith("\\")) {
       
       //  Trim the leading slash from the first path
@@ -3435,10 +3294,6 @@ public class DBDiskLDriver implements DiskInterface, DiskSizeInterface, DiskVolu
    */
   public boolean hasStreamsEnabled(SrvSession sess, TreeConnection tree) {
 
-	  if(1==1)
-	  {
-		  return false;//强制不返回可用流（免得xls报错，但共享编辑可能有需要）
-	  }
     //  Check that the context is a JDBC context
     
     if ( tree.getContext() instanceof DBDeviceContext) {
@@ -4465,14 +4320,6 @@ public int OfffileExists(SrvSession sess, TreeConnection tree, String name,int c
 //  	log4j.warn("DBD#fileExists 不符合规则的name参数 , 直接返回 NotExist ; name:"+name);
 //  	return FileStatus.NotExist;
 //  }
-//上面的为旧的方式，已经不适用
- 	//增加根路径的直接返回目录存在(如:username@/我的文件; username@/资料库)
- 	  //
-	if(name.equalsIgnoreCase("\\"+DBUtil.SHARENAME_COMMFILE) || name.equalsIgnoreCase("\\"+DBUtil.SHARENAME_USERFILE) || name.equalsIgnoreCase("\\"+DBUtil.SHARENAME_RECIVEFILE))  //新增加
-	{
-//		log4j.debug("DBD#fileExists username@\资料库　　根目录 , 直接返回 DirectoryExists ");
-		return FileStatus.DirectoryExists;
-	}
       
   if ( FileName.containsStreamName(name)) {
     

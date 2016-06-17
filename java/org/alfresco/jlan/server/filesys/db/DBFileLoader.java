@@ -28,7 +28,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
-
 import org.alfresco.jlan.server.SrvSession;
 import org.alfresco.jlan.server.core.DeviceContext;
 import org.alfresco.jlan.server.filesys.DiskDeviceContext;
@@ -54,8 +53,8 @@ import org.alfresco.jlan.server.filesys.loader.MultipleFileRequest;
 import org.alfresco.jlan.server.filesys.loader.SingleFileRequest;
 import org.alfresco.jlan.util.MemorySize;
 import org.springframework.extensions.config.ConfigElement;
-import org.apache.log4j.Logger;
 
+import org.apache.log4j.Logger;
 import com.util.DBUtil;
 import com.util.DiskUtil;
 
@@ -2739,42 +2738,25 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 
 				// Create a unique temporary file name
 
-//				StringBuffer tempName = new StringBuffer();
-//				tempName.append(getTempFilePrefix());
-//				tempName.append(fid);
-//
-//				if (stid > 0) {
-//					tempName.append("_");
-//					tempName.append(stid);
-//
-//					// DEBUG
-//					log4j.debug("## Temp file for stream ##");
-//				}
-//
-//				tempName.append(".tmp");
-				
-				StringBuffer tempFileName = new StringBuffer();
-				tempFileName.append(getTempFilePrefix());				
-				tempFileName.append(did);
-				tempFileName.append("_");
-				tempFileName.append(fid);
+				StringBuffer tempName = new StringBuffer();
+				tempName.append(getTempFilePrefix());
+				tempName.append(fid);
+
 				if (stid > 0) {
-					tempFileName.append("_");
-					tempFileName.append(stid);
+					tempName.append("_");
+					tempName.append(stid);
+
 					// DEBUG
 					log4j.debug("## Temp file for stream ##");
 				}
-				tempFileName.append("_");
-				tempFileName.append(fname);
+
+				tempName.append(".tmp");
 				// Create a new file segment
 
 				fileSegInfo = new FileSegmentInfo();
-//				fileSeg = FileSegment.createSegment(fileSegInfo, tempFileName.toString(),
-//						m_curTempDir, params.isReadOnlyAccess() == false,
-//						userName+"_"+did);
-				fileSeg = FileSegment.createSegment(fileSegInfo, tempFileName.toString(),
+				fileSeg = FileSegment.createSegment(fileSegInfo, fname,
 						m_curTempDir, params.isReadOnlyAccess() == false,
-						userName+"_temp");
+						userName+"_"+did);
 //				fileSeg = FileSegment.createSegment(fileSegInfo, tempName.toString(),
 //						m_curTempDir, params.isReadOnlyAccess() == false,
 //						userName+"_"+did);
@@ -2803,34 +2785,6 @@ public class DBFileLoader implements FileLoader, BackgroundFileLoader,
 
 				// Check if the temporary file exists, if not then create it
 				File tempFile = new File(fileSeg.getTemporaryFile());
-				
-				//新增加的判断(判断文件是否更新)
-				DBFileInfo finfo = (DBFileInfo) state.findAttribute(FileState.FileInformation);
-				
-				
-				//修改此段只对自己生成，别人的修改不生效 
-				/*if(null != finfo && tempFile.exists() && finfo.getModifyDateTime()>tempFile.lastModified())
-				{
-					//注意是用finfo.getModifyDateTime() 文件的修改时间
-					log4j.warn("DBF#createNetworkFile 新增加的判断(判断文件是否更新) finfo.size:"+finfo.getSize()+",tempSize:"+tempFile.length()+","+ finfo.getModifyDateTime()+" > "+tempFile.lastModified()+" , fname:"+fname);
-					//解决web端修改或其他终端修改不更新bug
-					// Create the temporary file
-					DiskUtil.copySingeFile(tempFile, new File(fileSeg.getTemporaryFile()+"."+finfo.getModifyDateTime()+".tmp"));
-					tempFile.delete();//先删除
-					
-					tempFile.createNewFile();
-					log4j.warn("重建后finfo.size:"+finfo.getSize()+",temp.size:"+tempFile.length()+",state.size:"+state.getFileSize());
-
-					// Reset the file segment state to indicate a file load is
-					// required
-
-					fileSeg.setStatus(FileSegmentInfo.Initial);
-					//清理缓存
-					state.setFileStatus( FileStatus.FileExists, FileState.ReasonFileCreated);
-					state.removeAllAttributes();
-				}*/
-				
-				//
 				if (tempFile.exists() == false) {
 
 					// Create the temporary file
